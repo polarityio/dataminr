@@ -1,19 +1,10 @@
-const { size, map, some, get } = require('lodash/fp');
+const { size, map, some } = require('lodash/fp');
 const { getResultForThisEntity } = require('./dataTransformations');
+const { MAX_PAGE_SIZE } = require('./constants');
 
-const assembleLookupResults = (
-  entities,
-  indicators,
-  noncommunitySearchResults,
-  options
-) =>
+const assembleLookupResults = (entities, alerts, options) =>
   map((entity) => {
-    const resultsForThisEntity = getResultsForThisEntity(
-      entity,
-      indicators,
-      noncommunitySearchResults,
-      options
-    );
+    const resultsForThisEntity = getResultsForThisEntity(entity, alerts, options);
 
     const resultsFound = some(size, resultsForThisEntity);
 
@@ -30,36 +21,15 @@ const assembleLookupResults = (
     return lookupResult;
   }, entities);
 
-const getResultsForThisEntity = (
-  entity,
-  indicators,
-  noncommunitySearchResults,
-  options
-) => ({
-  indicators: getResultForThisEntity(entity, indicators),
-  noncommunitySearchResults: getResultForThisEntity(entity, noncommunitySearchResults)
+const getResultsForThisEntity = (entity, alerts, options) => ({
+  alerts: getResultForThisEntity(entity, alerts)
 });
 
-const createSummaryTags = ({ indicators, noncommunitySearchResults }, options) => {
-  const indicatorSize = size(indicators) || size(noncommunitySearchResults);
-
-  return [].concat(indicatorSize ? `Indicators: ${indicatorSize}` : []).concat(
-    size(noncommunitySearchResults)
-      ? noncommunitySearchResults.flatMap((hit) => {
-          const cvssV2BaseScore =
-            get('_source.cve.nist.cvssv2.base_score', hit) ||
-            get('_source.nist.cvssv2.base_score', hit);
-
-          const cvssV3BaseScore =
-            get('_source.cve.nist.cvssv2.base_score', hit) ||
-            get('_source.nist.cvssv2.base_score', hit);
-
-          return []
-            .concat(cvssV2BaseScore ? `CVSSv2 Base Score: ${cvssV2BaseScore}` : [])
-            .concat(cvssV3BaseScore ? `CVSSv3 Base Score: ${cvssV3BaseScore}` : []);
-        })
+const createSummaryTags = ({ alerts }, options) =>
+  [].concat(
+    size(alerts)
+      ? `Alerts: ${size(alerts)}${size(alerts) === MAX_PAGE_SIZE ? '+' : ''}`
       : []
   );
-};
 
 module.exports = assembleLookupResults;

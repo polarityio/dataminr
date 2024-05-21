@@ -8,15 +8,9 @@ const {
   uniqWith,
   isEqual,
   identity,
-  split,
-  trim,
-  uniq,
-  compact,
   first,
   toLower,
-  some,
-  every,
-  size
+  some
 } = require('lodash/fp');
 
 const isPrivateIP = (ip) => {
@@ -51,26 +45,6 @@ const getEntityTypes = (typesToGet, entities) => {
   return entitiesOfTypesToGet;
 };
 
-const removeEntityTypes = (typesToRemove, entities) => {
-  const lowerTypesToRemove =
-    typeof typesToRemove === 'string'
-      ? [toLower(typesToRemove)]
-      : map(toLower, typesToRemove);
-
-  const entitiesNotOfTypesToRemove = filter((entity) => {
-    const lowerEntityTypes = map(toLower, entity.types);
-
-    const entityTypesAreNotInTypesToRemove = every(
-      (typeToRemove) => !lowerEntityTypes.includes(typeToRemove),
-      lowerTypesToRemove
-    );
-
-    return entityTypesAreNotInTypesToRemove;
-  }, entities);
-
-  return entitiesNotOfTypesToRemove;
-};
-
 const getResultForThisEntity = (
   entity,
   results,
@@ -84,36 +58,8 @@ const getResultForThisEntity = (
     onlyOneResultExpected ? first : identity
   )(results);
 
-const splitCommaSeparatedUserOption = (key, options) =>
-  flow(get(key), split(','), map(trim), compact, uniq)(options);
-
-const removeBlocklistedIpsAndDomains = (entities, options) => {
-  const ipBlocklistRegex = setupBlocklistRegex('ipBlocklistRegex', options);
-  const domainBlocklistRegex = setupBlocklistRegex('domainBlocklistRegex', options);
-
-  const entitiesNotInBlocklist = filter((entity) => {
-    if (!(entity.isIP || entity.isDomain)) return true;
-
-    const ipIsInBlocklist =
-      entity.isIP && ipBlocklistRegex && ipBlocklistRegex.test(entity.value);
-
-    const domainIsInBlocklist =
-      entity.isDomain && domainBlocklistRegex && domainBlocklistRegex.test(entity.value);
-
-    return !ipIsInBlocklist && !domainIsInBlocklist;
-  }, entities);
-
-  return entitiesNotInBlocklist;
-};
-
-const setupBlocklistRegex = (key, options) =>
-  flow(get(key), size)(options) === 0 && new RegExp(options.domainBlocklistRegex, 'i');
-
 module.exports = {
   removePrivateIps,
   getEntityTypes,
-  removeEntityTypes,
-  getResultForThisEntity,
-  splitCommaSeparatedUserOption,
-  removeBlocklistedIpsAndDomains
+  getResultForThisEntity
 };

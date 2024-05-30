@@ -3,6 +3,12 @@ module.exports = {
   acronym: 'DM',
   description: 'Search Dataminr by all entities to get related Alerts',
   entityTypes: ['*'],
+  customTypes: [
+    {
+      key: 'allText',
+      regex: '\S[\s\S]{2,256}\S'
+    }
+  ],
   styles: ['./client/styles.less'],
   defaultColor: 'light-blue',
   onDemandOnly: true,

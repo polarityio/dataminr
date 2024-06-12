@@ -2,11 +2,22 @@ module.exports = {
   name: 'Dataminr',
   acronym: 'DM',
   description: 'Search Dataminr by all entities to get related Alerts',
-  entityTypes: ['*'],
+  entityTypes: [
+    'domain',
+    'IPv4',
+    'IPv6',
+    'IPv4CIDR',
+    'email',
+    'MD5',
+    'SHA1',
+    'SHA256',
+    'cve',
+    'url'
+  ],
   customTypes: [
     {
       key: 'allText',
-      regex: '\S[\s\S]{2,256}\S'
+      regex: /\S[\s\S]{2,256}\S/
     }
   ],
   styles: ['./client/styles.less'],

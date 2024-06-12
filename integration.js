@@ -14,7 +14,7 @@ const doLookup = async (entities, options, cb) => {
   try {
     Logger.debug({ entities }, 'Entities');
 
-    const searchableEntities = removePrivateIps(entitiesWithoutBlocklistedEntities);
+    const searchableEntities = removePrivateIps(entities);
 
     const alerts = await getAlerts(searchableEntities, options);
 

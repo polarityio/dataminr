@@ -7,6 +7,8 @@ const {
 
 const { requestsInParallel } = require('../request');
 
+const { MAX_PAGE_SIZE } = require('../constants');
+
 const getAlerts = async (entities, options) => {
   const Logger = getLogger();
 
@@ -18,9 +20,9 @@ const getAlerts = async (entities, options) => {
         qs: {
           query: entity.value,
           alertversion: 14,
-          num: 10
+          num: MAX_PAGE_SIZE
         },
-        options,
+        options
       }),
       entities
     );

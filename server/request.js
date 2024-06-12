@@ -17,14 +17,17 @@ const requestForAuth = createRequestWithDefaults({
   roundedSuccessStatusCodes: [200],
   requestOptionsToOmitFromLogsKeyPaths: ['form.client_id', 'form.client_secret'],
   postprocessRequestFailure: (error) => {
-    const errorResponseBody = JSON.parse(error.description);
-    error.message = `${error.message} - (${error.status})${
-      errorResponseBody.message || errorResponseBody.errorMessage
-        ? `| ${errorResponseBody.message || errorResponseBody.errorMessage}`
-        : ''
-    }`;
-
-    throw error;
+    try {
+      const errorResponseBody = JSON.parse(error.description);
+      error.message = `${error.message} - (${error.status})${
+        errorResponseBody.message || errorResponseBody.errorMessage
+          ? `| ${errorResponseBody.message || errorResponseBody.errorMessage}`
+          : ''
+      }`;
+      throw error;
+    } catch (parseError) {
+      throw error;
+    }
   }
 });
 
@@ -36,7 +39,7 @@ const requestWithDefaults = createRequestWithDefaults({
     const token = await getToken(options);
     return {
       ...requestOptions,
-      url: `https://gateway.dataminr.com/${route}`,
+      url: `${options.url}/${route}`,
       headers: {
         Authorization: `dmauth ${token}`
       },
@@ -44,8 +47,6 @@ const requestWithDefaults = createRequestWithDefaults({
     };
   },
   postprocessRequestFailure: (error) => {
-    // if ([404, 202].includes(error.status)) return null;
-
     const errorResponseBody = JSON.parse(error.description);
     error.message = `${error.message} - (${error.status})${
       errorResponseBody.message || errorResponseBody.errorMessage
@@ -66,7 +67,7 @@ const getToken = async (options) => {
     'body',
     await requestForAuth({
       method: 'POST',
-      url: 'https://gateway.dataminr.com/auth/2/token',
+      url: `${options.url}/auth/2/token`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
@@ -79,8 +80,11 @@ const getToken = async (options) => {
     })
   );
 
-  getLogger().trace({ test: 1111111111, tokenResponse }, 'Token Response');
-  tokenCache.set(tokenCacheKey, tokenResponse.dmaToken, tokenResponse.expires_in - 120);
+  tokenCache.set(
+    tokenCacheKey,
+    tokenResponse.dmaToken,
+    DateTime.fromMillis(tokenResponse.expire).diffNow('seconds').seconds
+  );
 
   return tokenResponse.dmaToken;
 };

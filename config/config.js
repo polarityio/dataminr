@@ -1,9 +1,25 @@
 module.exports = {
   name: 'Dataminr',
   acronym: 'DM',
-  description:
-    'TODO',
-  entityTypes: ['*'],
+  description: 'Search Dataminr by all entities to get related Alerts',
+  entityTypes: [
+    'domain',
+    'IPv4',
+    'IPv6',
+    'IPv4CIDR',
+    'email',
+    'MD5',
+    'SHA1',
+    'SHA256',
+    'cve',
+    'url'
+  ],
+  customTypes: [
+    {
+      key: 'allText',
+      regex: /\S[\s\S]{2,256}\S/
+    }
+  ],
   styles: ['./client/styles.less'],
   defaultColor: 'light-blue',
   onDemandOnly: true,
@@ -28,59 +44,31 @@ module.exports = {
   options: [
     {
       key: 'url',
-      name: 'Flashpoint API URL',
+      name: 'Dataminr API URL',
       description:
-        'The base URL of the Flashpoint API including the schema (i.e., https://)',
-      default: 'https://api.flashpoint.io',
+        'The base URL of the Dataminr API including the schema (i.e., https://)',
+      default: 'https://gateway.dataminr.com',
       type: 'text',
       userCanEdit: false,
       adminOnly: true
     },
     {
-      key: 'apiKey',
-      name: 'API Key',
-      description: 'Valid Flashpoint API Key',
+      key: 'clientId',
+      name: 'Client ID',
+      description: 'Your Client ID Credential',
+      default: '',
+      type: 'text',
+      userCanEdit: false,
+      adminOnly: true
+    },
+    {
+      key: 'clientSecret',
+      name: 'Client Secret',
+      description: 'Your Client Secret Credential',
       default: '',
       type: 'password',
-      userCanEdit: true,
-      adminOnly: false
-    },
-    {
-      key: 'limit',
-      name: 'Result Limit',
-      description: 'The maximum amount of results to be returned per query',
-      default: 10,
-      type: 'number',
-      userCanEdit: true,
-      adminOnly: false
-    },
-    {
-      key: 'blocklist',
-      name: 'Ignore List',
-      description:
-        'Comma delimited List of domains and IPs that you never want to send to Flashpoint',
-      default: '',
-      type: 'text',
       userCanEdit: false,
-      adminOnly: false
-    },
-    {
-      key: 'domainBlocklistRegex',
-      name: 'Ignore Domain Regex',
-      description: 'Domains that match the given regex will not be looked up.',
-      default: '',
-      type: 'text',
-      userCanEdit: false,
-      adminOnly: false
-    },
-    {
-      key: 'ipBlocklistRegex',
-      name: 'Ignore IP Regex',
-      description: 'IPs that match the given regex will not be looked up.',
-      default: '',
-      type: 'text',
-      userCanEdit: false,
-      adminOnly: false
+      adminOnly: true
     }
   ]
 };

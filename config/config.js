@@ -58,8 +58,8 @@ module.exports = {
       description: 'Your Client ID Credential',
       default: '',
       type: 'text',
-      userCanEdit: true,
-      adminOnly: false
+      userCanEdit: false,
+      adminOnly: true
     },
     {
       key: 'clientSecret',
@@ -67,8 +67,8 @@ module.exports = {
       description: 'Your Client Secret Credential',
       default: '',
       type: 'password',
-      userCanEdit: true,
-      adminOnly: false
+      userCanEdit: false,
+      adminOnly: true
     }
   ]
 };

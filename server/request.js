@@ -17,14 +17,17 @@ const requestForAuth = createRequestWithDefaults({
   roundedSuccessStatusCodes: [200],
   requestOptionsToOmitFromLogsKeyPaths: ['form.client_id', 'form.client_secret'],
   postprocessRequestFailure: (error) => {
-    const errorResponseBody = JSON.parse(error.description);
-    error.message = `${error.message} - (${error.status})${
-      errorResponseBody.message || errorResponseBody.errorMessage
-        ? `| ${errorResponseBody.message || errorResponseBody.errorMessage}`
-        : ''
-    }`;
-
-    throw error;
+    try {
+      const errorResponseBody = JSON.parse(error.description);
+      error.message = `${error.message} - (${error.status})${
+        errorResponseBody.message || errorResponseBody.errorMessage
+          ? `| ${errorResponseBody.message || errorResponseBody.errorMessage}`
+          : ''
+      }`;
+      throw error;
+    } catch (parseError) {
+      throw error;
+    }
   }
 });
 

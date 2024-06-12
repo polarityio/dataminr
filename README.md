@@ -6,6 +6,10 @@ The Polarity Dataminr integration allows Polarity to search Dataminr by all enti
 
 For more information on Dataminr, please visit [official website](https://www.dataminr.com/).
 
+| <img src="./images/overlay.png" width=50%/> |
+|---------------------------------------------|
+| *Alerts Example*                            |
+
 ## Dataminr Integration Options
 ### Dataminr API URL
 The base URL of the Dataminr API including the schema (i.e., https://)

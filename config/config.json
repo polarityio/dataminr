@@ -21,6 +21,9 @@
       "regex": "\\S[\\s\\S]{2,256}\\S"
     }
   ],
+  "javascript": [
+    "./client/dataminr.js"
+  ],
   "styles": [
     "./client/styles.less"
   ],
@@ -46,10 +49,19 @@
   },
   "options": [
     {
+      "key": "stickyAlerts",
+      "name": "Pin Dataminr Alerts",
+      "description": "Pin Dataminr Alerts to the top of the Polarity UI",
+      "default": false,
+      "type": "boolean",
+      "userCanEdit": true,
+      "adminOnly": false
+    },
+    {
       "key": "url",
       "name": "Dataminr API URL",
       "description": "The base URL of the Dataminr API including the schema (i.e., https://)",
-      "default": "https://gateway.dataminr.com",
+      "default": "https://api.dataminr.com",
       "type": "text",
       "userCanEdit": false,
       "adminOnly": true
@@ -71,6 +83,21 @@
       "type": "password",
       "userCanEdit": false,
       "adminOnly": true
+    },
+    {
+      "key": "pollInterval",
+      "name": "Poll Interval",
+      "description": "The interval in seconds for the server to poll for new Pulse Alerts",
+      "default": 60,
+      "type": "number",
+      "userCanEdit": false,
+      "adminOnly": true,
+      "validators": [
+        {
+          "type": "sec",
+          "value": 30
+        }
+      ]
     }
   ]
 }

@@ -6,28 +6,32 @@ const {
 } = require('polarity-integration-utils');
 
 const { requestsInParallel } = require('../request');
-
 const { MAX_PAGE_SIZE } = require('../constants');
 
-const getAlerts = async (entities, options) => {
+/**
+ * Search for Pulse alerts matching the given entities
+ * @param {Array<Object>} entities - Array of entity objects to search for
+ * @param {Object} options - Configuration options
+ * @returns {Promise<Array<Object>>} Resolves with array of alert results
+ */
+const searchPulseAlerts = async (entities, options) => {
   const Logger = getLogger();
 
   try {
     const alertsRequests = map(
       (entity) => ({
         resultId: entity.value,
-        route: `api/3/alerts`,
+        route: `pulse/v1/alerts`,
         qs: {
           query: entity.value,
-          alertversion: 14,
-          num: MAX_PAGE_SIZE
+          pageSize: MAX_PAGE_SIZE
         },
         options
       }),
       entities
     );
 
-    const alerts = await requestsInParallel(alertsRequests, 'body.data.alerts');
+    const alerts = await requestsInParallel(alertsRequests, 'body.alerts');
 
     return alerts;
   } catch (error) {
@@ -37,10 +41,10 @@ const getAlerts = async (entities, options) => {
         formattedError: err,
         error
       },
-      'Getting Alerts Failed'
+      'Searching Pulse Alerts Failed'
     );
     throw error;
   }
 };
 
-module.exports = getAlerts;
+module.exports = searchPulseAlerts;

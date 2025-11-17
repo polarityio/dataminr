@@ -12,74 +12,77 @@
         {{fa-icon "laptop" fixedWidth=true}}
         Alert
       </h1>
-      {{#if alert.expandAlertURL}}
+      {{#if alert.dataminrAlertUrl}}
         <div>
-          <a href="{{alert.expandAlertURL}}" class="p-link">View in Dataminr
+          <a href="{{alert.dataminrAlertUrl}}" class="p-link">View in Dataminr
             {{fa-icon "external-link-square" class="external-link-icon"}}</a>
         </div>
       {{/if}}
-      {{#if alert.eventLocation.name}}
+      {{#if alert.estimatedEventLocation.name}}
         <div class="mb-1 mt-1">
           <span class="p-block">
             {{fa-icon "map-marker-alt" fixedWidth=true}}
-            {{alert.eventLocation.name}}
+            {{alert.estimatedEventLocation.name}}
           </span>
         </div>
       {{/if}}
+      <!--
+      // Not in v1 (v4) API schema - eventMapLargeURL property not defined on Alert
       {{#if alert.eventMapLargeURL}}
         <div>
           <img src="{{alert.eventMapLargeURL}}" alt="Map View" />
         </div>
       {{/if}}
-      {{#if alert.caption}}
+      -->
+      {{#if alert.headline}}
         <div class="mb-1 mt-1">
           <span class="p-block">
-            {{alert.caption}}
+            {{alert.headline}}
           </span>
         </div>
       {{/if}}
-      {{#if alert.eventTime}}
+      {{#if alert.alertTimestamp}}
         <div>
           <span class="p-key">Published:</span>
           <span class="p-value">{{moment-format
-              alert.eventTime
+              alert.alertTimestamp
               "MM/DD/YYYY HH:mm:ss"
               timeZone=timezone
             }}</span>
         </div>
       {{/if}}
-      {{#if alert.companies}}
+      {{#if alert.alertCompanies}}
         <div>
           <span class="p-key">Companies:</span>
           <span class="p-value">
-            {{#each alert.companies as |company index|}}
+            {{#each alert.alertCompanies as |company index|}}
               {{company.name}}{{#if
-                (not (eq (sub alert.companies.length 1) index))
+                (not (eq (sub alert.alertCompanies.length 1) index))
               }},{{/if}}
             {{/each}}
           </span>
         </div>
       {{/if}}
-      {{#if alert.categories}}
+      {{#if alert.alertTopics}}
         <div>
-          <span class="p-key">Categories:</span>
+          <span class="p-key">Topics:</span>
           <span class="p-value">
-            {{#each alert.categories as |category index|}}
-              {{category.name}}{{#if
-                (not (eq (sub alert.categories.length 1) index))
+            {{#each alert.alertTopics as |topic index|}}
+              {{topic.name}}{{#if
+                (not (eq (sub alert.alertTopics.length 1) index))
               }},{{/if}}
             {{/each}}
           </span>
         </div>
       {{/if}}
-      {{#if alert.relatedTerms}}
+      {{#if alert.alertReferenceTerms}}
         <div>
-          <span class="p-key">Alert Reference Terms:</span>
+          <span class="p-key">Reference Terms:</span>
           <span class="p-value">
-            {{#each alert.relatedTerms as |relatedTerm index|}}
-              <a href="{{relatedTerm.url}}" class="p-link">{{relatedTerm.text}}
+            {{#each alert.alertReferenceTerms as |referenceTerm index|}}
+              <a href="https://app.dataminr.com/#search-popup/search/{{referenceTerm.text}}" class="p-link">{{referenceTerm.text}}
                 {{fa-icon "external-link-square" class="external-link-icon"}}</a>{{#if
-                (not (eq (sub alert.relatedTerms.length 1) index))
+                (not (eq (sub alert.alertReferenceTerms.length 1) index))
               }},{{/if}}
             {{/each}}
           </span>
@@ -235,14 +238,12 @@
 
         {{#if
           (or
-            metadata.threats.length
-            metadata.URLs.length
+            metadata.threatActors.length
+            metadata.URL.length
             metadata.addresses.length
-            metadata.asns.length
-            metadata.orgs.length
-            metadata.hashes.length
-            metadata.products.length
-            metadata.malwares.length
+            metadata.asOrgs.length
+            metadata.hashValues.length
+            metadata.malware.length
           )
         }}
           {{#if (get (get expandableTitleStates "metadata") alertIndex)}}
@@ -255,16 +256,28 @@
               {{fa-icon icon="angle-up"}}
             </a>
             <div class="ml-2 metadata">
-              {{#if metadata.threats.length}}
+              {{#if metadata.threatActors.length}}
                 <div>
                   <span class="p-key">Threats:</span>
-                  <span class="p-value">{{join ", " metadata.threats}}</span>
+                  <span class="p-value">
+                    {{#each metadata.threatActors as |threatActor index|}}
+                      {{threatActor.name}}{{#if
+                        (not (eq (sub metadata.threatActors.length 1) index))
+                      }},{{/if}}
+                    {{/each}}
+                  </span>
                 </div>
               {{/if}}
-              {{#if metadata.URLs.length}}
+              {{#if metadata.URL.length}}
                 <div>
                   <span class="p-key">URLs:</span>
-                  <span class="p-value">{{join ", " metadata.URLs}}</span>
+                  <span class="p-value">
+                    {{#each metadata.URL as |url index|}}
+                      {{url.name}}{{#if
+                        (not (eq (sub metadata.URL.length 1) index))
+                      }},{{/if}}
+                    {{/each}}
+                  </span>
                 </div>
               {{/if}}
               {{#if metadata.addresses.length}}
@@ -272,41 +285,56 @@
                   <span class="p-key">Addresses:</span>
                   <span class="p-value">
                     {{#each metadata.addresses as |address index|}}
-                      {{address.ip}}:{{address.port}}{{#if
+                      {{address.ip}}:{{address.port}}{{#if address.version}} ({{address.version}}){{/if}}{{#if
                         (not (eq (sub metadata.addresses.length 1) index))
                       }},{{/if}}
                     {{/each}}
                   </span>
                 </div>
               {{/if}}
-              {{#if metadata.asns.length}}
+              {{#if metadata.asOrgs.length}}
                 <div>
-                  <span class="p-key">ASNs:</span>
-                  <span class="p-value">{{join ", " metadata.asns}}</span>
+                  <span class="p-key">AS Organizations:</span>
+                  <span class="p-value">
+                    {{#each metadata.asOrgs as |asOrg index|}}
+                      {{asOrg.asn}}{{#if asOrg.asOrg}} ({{asOrg.asOrg}}){{/if}}{{#if
+                        (not (eq (sub metadata.asOrgs.length 1) index))
+                      }},{{/if}}
+                    {{/each}}
+                  </span>
                 </div>
               {{/if}}
-              {{#if metadata.orgs.length}}
-                <div>
-                  <span class="p-key">Organizations:</span>
-                  <span class="p-value">{{join ", " metadata.orgs}}</span>
-                </div>
-              {{/if}}
-              {{#if metadata.hashes.length}}
+              {{#if metadata.hashValues.length}}
                 <div>
                   <span class="p-key">Hashes:</span>
-                  <span class="p-value">{{join ", " metadata.hashes}}</span>
+                  <span class="p-value">
+                    {{#each metadata.hashValues as |hash index|}}
+                      {{hash.value}}{{#if hash.type}} ({{hash.type}}){{/if}}{{#if
+                        (not (eq (sub metadata.hashValues.length 1) index))
+                      }},{{/if}}
+                    {{/each}}
+                  </span>
                 </div>
               {{/if}}
+              <!--
+              // Not in v1 (v4) API schema - products property not defined on Metadata
               {{#if metadata.products.length}}
                 <div>
                   <span class="p-key">Products:</span>
                   <span class="p-value">{{join ", " metadata.products}}</span>
                 </div>
               {{/if}}
-              {{#if metadata.malwares.length}}
+              -->
+              {{#if metadata.malware.length}}
                 <div>
-                  <span class="p-key">Malwares:</span>
-                  <span class="p-value">{{join ", " metadata.malwares}}</span>
+                  <span class="p-key">Malware:</span>
+                  <span class="p-value">
+                    {{#each metadata.malware as |malware index|}}
+                      {{malware.name}}{{#if
+                        (not (eq (sub metadata.malware.length 1) index))
+                      }},{{/if}}
+                    {{/each}}
+                  </span>
                 </div>
               {{/if}}
             </div>
@@ -316,14 +344,14 @@
               {{on "click" (action "toggleExpandableTitle" alertIndex "metadata")}}
             >
               <span class="text">{{fa-icon icon="database" fixedWidth=true}}
-                Metadata</span>
+                Key Points</span>
               {{fa-icon icon="angle-down"}}
             </a>
           {{/if}}
         {{/if}}
       {{/with}}
 
-      {{#if alert.post.link}}
+      {{#if alert.publicPost.href}}
         {{#if (get (get expandableTitleStates "post") alertIndex)}}
           <a
             class="expandable-title"
@@ -334,44 +362,60 @@
             {{fa-icon icon="angle-up"}}
           </a>
           <div class="ml-2 post">
-            {{#if alert.post.link}}
+            {{#if alert.publicPost.href}}
               <div>
-                <a href="{{alert.post.link}}" class="p-link">View Post
+                <a href="{{alert.publicPost.href}}" class="p-link">View Post
                   {{fa-icon "external-link-square" class="external-link-icon"}}</a>
               </div>
             {{/if}}
+            <!--
+            // Not in v1 (v4) API schema - source property not defined on PublicPost
             {{#if alert.source.displayName}}
               <div>
                 <span class="p-key">Poster:</span>
                 <span class="p-value">{{alert.source.displayName}}</span>
               </div>
             {{/if}}
-            {{#if alert.post.timestamp}}
+            -->
+            {{#if alert.publicPost.timestamp}}
               <div>
                 <span class="p-key">Posted On:</span>
                 <span class="p-value">{{moment-format
-                    alert.post.timestamp
+                    alert.publicPost.timestamp
                     "MM/DD/YYYY HH:mm:ss"
                     timeZone=timezone
                   }}</span>
               </div>
             {{/if}}
-            {{#if alert.post.media}}
-              {{#each alert.post.media as |postMedia|}}
-                {{#if (eq postMedia.type "photo")}}
+            {{#if alert.publicPost.media}}
+              {{#each alert.publicPost.media as |postMedia|}}
+                {{#if (or (eq postMedia.type "photo") (eq postMedia.type "image"))}}
                   <div>
                     <img
-                      src="{{postMedia.media_url}}"
-                      alt="{{postMedia.display_url}} from {{postMedia.source}}"
+                      src="{{postMedia.href}}"
+                      alt="{{postMedia.href}}"
                     />
                   </div>
                 {{/if}}
+                {{#if (eq postMedia.type "audio")}}
+                  <div>
+                    <audio controls>
+                      <source src="{{postMedia.href}}" type="audio/mpeg">
+                      <source src="{{postMedia.href}}" type="audio/wav">
+                      <source src="{{postMedia.href}}" type="audio/ogg">
+                      <a href="{{postMedia.href}}" class="p-link">Download Audio
+                        {{fa-icon "external-link-square" class="external-link-icon"}}</a>
+                    </audio>
+                  </div>
+                {{/if}}
+                <!-- // Not in v1 (v4) API schema - link type not defined on PublicPostMedia
                 {{#if (eq postMedia.type "link")}}
                   <div>
-                    <a href="{{postMedia.url}}" class="p-link">{{postMedia.display_url}}
+                    <a href="{{postMedia.href}}" class="p-link">{{postMedia.href}}
                       {{fa-icon "external-link-square" class="external-link-icon"}}</a>
                   </div>
                 {{/if}}
+                -->
               {{/each}}
             {{/if}}
           </div>

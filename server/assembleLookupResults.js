@@ -1,6 +1,7 @@
 const { size, map, some } = require('lodash/fp');
 const { getResultForThisEntity } = require('./dataTransformations');
 const { MAX_PAGE_SIZE } = require('./constants');
+const { processAlertData } = require('./templateRenderer');
 
 /**
  * Assemble lookup results for entities from alerts
@@ -34,9 +35,18 @@ const assembleLookupResults = (entities, alerts, options) =>
  * @param {Array<Object>} alerts - Array of alert results
  * @returns {Object} Object containing alerts array for the entity
  */
-const getResultsForThisEntity = (entity, alerts) => ({
-  alerts: getResultForThisEntity(entity, alerts)
-});
+const getResultsForThisEntity = (entity, alerts) => {
+  const rawAlerts = getResultForThisEntity(entity, alerts);
+  // Preprocess alerts for block.hbs template (which doesn't support helpers)
+  const processedAlerts = Array.isArray(rawAlerts)
+    ? rawAlerts.map(function (alert) {
+        return processAlertData(alert);
+      })
+    : [];
+  return {
+    alerts: processedAlerts
+  };
+};
 
 /**
  * Create summary tags for lookup results

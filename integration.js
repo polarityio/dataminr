@@ -14,6 +14,7 @@ const {
 const { getCachedAlerts, getPollingState } = require('./server/pulseAlerts/stateManager');
 const { getPulseAlerts } = require('./server/pulseAlerts/getPulseAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
+const { renderAlertDetail, renderAlertNotification } = require('./server/templateRenderer');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
 
@@ -284,6 +285,39 @@ const onMessage = async (payload, options, cb) => {
             Logger.error({ error, formattedError: err, alertId: requestedAlertId }, 'Failed to get alert by ID');
             cb({ detail: error.message || 'Failed to get alert by ID', err });
           });
+        break;
+
+      case 'renderAlertDetail':
+        // Render alert detail HTML using handlebars template
+        const { alert: alertToRender } = payload;
+        if (!alertToRender) {
+          return cb({ detail: 'Missing alert in payload' });
+        }
+        try {
+          const renderedHtml = renderAlertDetail(alertToRender);
+          Logger.debug({ alertId: alertToRender.alertId }, 'Rendered alert detail template');
+          cb(null, { html: renderedHtml });
+        } catch (error) {
+          const err = parseErrorToReadableJson(error);
+          Logger.error(
+            { error, formattedError: err, alertId: alertToRender.alertId },
+            'Failed to render alert detail template'
+          );
+          cb({ detail: error.message || 'Failed to render alert detail template', err });
+        }
+        break;
+
+      case 'renderAlertNotification':
+        // Render alert notification HTML using handlebars template
+        try {
+          const renderedHtml = renderAlertNotification();
+          Logger.debug('Rendered alert notification template');
+          cb(null, { html: renderedHtml });
+        } catch (error) {
+          const err = parseErrorToReadableJson(error);
+          Logger.error({ error, formattedError: err }, 'Failed to render alert notification template');
+          cb({ detail: error.message || 'Failed to render alert notification template', err });
+        }
         break;
 
       default:

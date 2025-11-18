@@ -340,6 +340,7 @@ class DataminrIntegration {
     this.currentUser = null;
     this.currentAlerts = new Map(); // Map of alertId -> alert object
     this.lastQueryTimestamp = null; // ISO timestamp of last query
+    this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
 
     // Initialize the application
     this.init();
@@ -381,8 +382,12 @@ class DataminrIntegration {
           <div class="dataminr-header">
             <div class="dataminr-header-left">
               <span class="dataminr-title">Dataminr Alert</span>
-              <span class="dataminr-alert-icon">0</span>
-              <button class="dataminr-clear-all-alerts-btn" type="button" style="display: none;">Clear All Alerts</button>
+              <div class="dataminr-alert-icons-container">
+                <span class="dataminr-alert-icon dataminr-alert-icon-flash" title="Flash" aria-label="Flash" data-alert-type="Flash" style="display: none;">0</span>
+                <span class="dataminr-alert-icon dataminr-alert-icon-urgent" title="Urgent" aria-label="Urgent" data-alert-type="Urgent" style="display: none;">0</span>
+                <span class="dataminr-alert-icon dataminr-alert-icon-alert" title="Alert" aria-label="Alert" data-alert-type="Alert">0</span>
+              </div>
+              <button class="dataminr-clear-all-alerts-btn" type="button" aria-label="Clear All Alerts" style="display: none;">Clear All Alerts</button>
             </div>
             <div class="dataminr-show-body-icon">
               <svg class="dataminr-chevron-icon" width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -417,6 +422,12 @@ class DataminrIntegration {
           const isHidden = bodyElement.style.display === 'none';
           bodyElement.style.display = isHidden ? 'block' : 'none';
           chevronIcon.style.transform = isHidden ? 'rotate(-180deg)' : 'rotate(0deg)';
+          
+          // If closing the body, hide details and deselect active alert
+          if (!isHidden) {
+            this.hideAllDetails();
+            this.deactivateAllTagButtons();
+          }
         });
       }
 
@@ -903,9 +914,9 @@ class DataminrIntegration {
         return id && !displayedAlertIds.has(id);
       });
 
-      // Add next alert(s) up to 3 visible tags
+      // Add next alert(s) up to maxVisibleTags visible tags
       const visibleCount = visibleTagButtons.length;
-      const alertsToAdd = Math.min(3 - visibleCount, availableAlerts.length);
+      const alertsToAdd = Math.min(this.maxVisibleTags - visibleCount, availableAlerts.length);
       for (let i = 0; i < alertsToAdd; i++) {
         const alert = availableAlerts[i];
         if (alert) {
@@ -934,25 +945,80 @@ class DataminrIntegration {
   }
 
   /**
-   * Update alert count in UI
+   * Calculate alert counts by type
    * @private
+   * @returns {Object} Object with counts for each alert type
+   * @returns {number} returns.flash - Count of Flash alerts
+   * @returns {number} returns.urgent - Count of Urgent alerts
+   * @returns {number} returns.alert - Count of Alert alerts
+   * @returns {number} returns.total - Total count of all alerts
    */
-  updateAlertCount(count) {
-    const alertIcon = document.querySelector('.dataminr-alert-icon');
-    if (alertIcon) {
-      alertIcon.textContent = count.toString();
+  calculateAlertCountsByType() {
+    if (!this.currentAlerts || this.currentAlerts.size === 0) {
+      return { flash: 0, urgent: 0, alert: 0, total: 0 };
     }
 
-    // Show/hide clear button based on alert count
+    const counts = { flash: 0, urgent: 0, alert: 0, total: 0 };
+    
+    this.currentAlerts.forEach((alert) => {
+      const alertType = this.getAlertType(alert);
+      const normalizedType = alertType.toLowerCase();
+      
+      if (normalizedType === 'flash') {
+        counts.flash++;
+      } else if (normalizedType === 'urgent') {
+        counts.urgent++;
+      } else {
+        // Default to 'alert' for any other type or unknown types
+        counts.alert++;
+      }
+      counts.total++;
+    });
+
+    return counts;
+  }
+
+  /**
+   * Update alert counts in UI (by type: Flash, Urgent, Alert)
+   * @private
+   * @param {number} [count] - Optional total count (if not provided, calculates from currentAlerts)
+   */
+  updateAlertCount(count) {
+    // Calculate counts by type
+    const counts = this.calculateAlertCountsByType();
+    const totalCount = count !== undefined ? count : counts.total;
+
+    // Update Flash count
+    const flashIcon = document.querySelector('.dataminr-alert-icon-flash');
+    if (flashIcon) {
+      flashIcon.textContent = counts.flash.toString();
+      flashIcon.style.display = counts.flash > 0 ? 'inline-block' : 'none';
+    }
+
+    // Update Urgent count
+    const urgentIcon = document.querySelector('.dataminr-alert-icon-urgent');
+    if (urgentIcon) {
+      urgentIcon.textContent = counts.urgent.toString();
+      urgentIcon.style.display = counts.urgent > 0 ? 'inline-block' : 'none';
+    }
+
+    // Update Alert count
+    const alertIcon = document.querySelector('.dataminr-alert-icon-alert');
+    if (alertIcon) {
+      alertIcon.textContent = counts.alert.toString();
+      alertIcon.style.display = counts.alert > 0 ? 'inline-block' : 'none';
+    }
+
+    // Show/hide clear button based on total alert count
     const clearButton = document.querySelector('.dataminr-clear-all-alerts-btn');
     if (clearButton) {
-      clearButton.style.display = count > 0 ? 'inline-block' : 'none';
+      clearButton.style.display = totalCount > 0 ? 'inline-block' : 'none';
     }
 
     // Add visual indicator if there are alerts
     const container = byId('dataminr-container');
     if (container) {
-      if (count > 0) {
+      if (totalCount > 0) {
         container.classList.add('dataminr-has-alerts');
       } else {
         container.classList.remove('dataminr-has-alerts');
@@ -1339,7 +1405,8 @@ class DataminrIntegration {
         html += '<div class="dataminr-public-post-media-container">';
 
         if (type === 'image' || type === 'photo') {
-          html += '<div class="dataminr-public-post-media-image-container">';
+          const imageStyle = mediaCount > 1 ? `grid-template-columns: repeat(${mediaCount}, 1fr);` : "grid-template-columns: 1fr;";
+          html += `<div class="dataminr-public-post-media-image-container" style="${imageStyle}">`;
         }
 
         mediaByType[type].forEach((media) => {
@@ -1350,11 +1417,11 @@ class DataminrIntegration {
             )}" data-image-src="${htmlEscape(media.href)}" />
             </div>`;
           } else if (media.type === 'video') {
-            html += `<video controls style="width: 100%;" src="${htmlEscape(
+            html += `<video aria-label="Video player" controls controlslist="nodownload" style="width: 100%;" src="${htmlEscape(
               media.href
             )}" />`;
           } else if (media.type === 'audio') {
-            html += `<audio controls style="width: 100%;" src="${htmlEscape(
+            html += `<audio aria-label="Audio player" controls controlslist="nodownload" style="width: 100%;" src="${htmlEscape(
               media.href
             )}" />`;
           }
@@ -1869,9 +1936,12 @@ class DataminrIntegration {
 
     // If container doesn't exist, build it from scratch
     if (!alertsListContainer || showAll) {
-      const alertsToShow = showAll ? alertsArray : alertsArray.slice(0, 3);
+      // If there are more than maxVisibleTags alerts, show maxVisibleTags - 1 to leave room for "+ remaining" button
+      // Otherwise, show all alerts
+      const maxToShow = alertsArray.length > this.maxVisibleTags ? this.maxVisibleTags - 1 : this.maxVisibleTags;
+      const alertsToShow = showAll ? alertsArray : alertsArray.slice(0, maxToShow);
 
-      // Build alerts inner HTML - only process first 3
+      // Build alerts inner HTML - only process first maxToShow
       let alertsHtml = '<div class="dataminr-alerts-list">';
       alertsToShow.forEach((alert) => {
         const alertType = this.getAlertType(alert);
@@ -1893,8 +1963,8 @@ class DataminrIntegration {
         `;
       });
 
-      // If there are more than 3 alerts, add a "+# remaining" item
-      const remainingCount = alertsArray.length - 3;
+      // If there are more than maxVisibleTags alerts, add a "+# remaining" item
+      const remainingCount = alertsArray.length - maxToShow;
       const displayRemaining = showAll || remainingCount <= 0 ? 'none' : 'block';
       alertsHtml += `
         <button class="dataminr-tag dataminr-tag-alert" data-alert-id="remaining" title="Remaining alerts" style="display: ${displayRemaining}">
@@ -1990,9 +2060,9 @@ class DataminrIntegration {
         return id && !displayedAlertIds.has(id);
       });
 
-      // Add alerts up to 3 visible tags total
+      // Add alerts up to maxVisibleTags visible tags total
       const visibleCount = visibleTagButtons.length;
-      const alertsToAdd = Math.min(3 - visibleCount, availableAlerts.length);
+      const alertsToAdd = Math.min(this.maxVisibleTags - visibleCount, availableAlerts.length);
       for (let i = 0; i < alertsToAdd; i++) {
         const alert = availableAlerts[i];
         if (alert) {
@@ -2037,7 +2107,13 @@ class DataminrIntegration {
    */
   getUrlParameter(name) {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name);
+    const lowerName = name.toLowerCase();
+    for (const [key, value] of urlParams.entries()) {
+      if (key.toLowerCase() === lowerName) {
+        return value;
+      }
+    }
+    return null;
   }
 
   /**

@@ -23,8 +23,11 @@ const getPulseAlerts = async (options, paginationCursor = null, count = null, si
   const Logger = getLogger();
 
   try {
+    // Use count as pageSize if it exists and is greater than MAX_PAGE_SIZE, otherwise use MAX_PAGE_SIZE
+    const pageSize = count && count > MAX_PAGE_SIZE ? count : MAX_PAGE_SIZE;
+    
     const queryParams = {
-      pageSize: count && count > 0 ? Math.min(count, MAX_PAGE_SIZE) : MAX_PAGE_SIZE
+      pageSize: pageSize
     };
 
     // Add pagination cursor if provided (but not if count is specified for initial query)
@@ -77,7 +80,8 @@ const getPulseAlerts = async (options, paginationCursor = null, count = null, si
         originalAlertCount: response.body && response.body.alerts ? response.body.alerts.length : 0,
         hasNextPage: !!(response.body && response.body.nextPage),
         hasPreviousPage: !!(response.body && response.body.previousPage),
-        filteredByTimestamp: !!(sinceTimestamp && !count)
+        filteredByTimestamp: !!(sinceTimestamp && !count),
+        pageSize: pageSize
       },
       'Pulse API response received'
     );

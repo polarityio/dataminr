@@ -741,6 +741,11 @@ img {
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
+  color: @color-text-primary !important;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+  }
 }
 
 .dataminr-alert-intel-agents-discovered-entity-item svg {
@@ -749,21 +754,15 @@ img {
 
 .dataminr-alert-companies,
 .dataminr-alert-topics,
-.dataminr-alert-sectors {
+.dataminr-alert-sectors,
+.dataminr-alert-lists-matched {
   font-size: 12px;
 }
 
-.dataminr-alert-companies-label {
-  font-weight: 600;
-  color: @color-text-secondary;
-}
-
-.dataminr-alert-topics-label {
-  font-weight: 600;
-  color: @color-text-secondary;
-}
-
-.dataminr-alert-sectors-label {
+.dataminr-alert-companies-label,
+.dataminr-alert-topics-label,
+.dataminr-alert-sectors-label,
+.dataminr-alert-lists-matched-label {
   font-weight: 600;
   color: @color-text-secondary;
 }
@@ -953,9 +952,6 @@ img {
   padding: 10px 10px 15px 15px;
   background-color: @color-bg-metadata;
   border-radius: 4px;
-}
-
-.dataminr-alert-linked-alerts-item-clickable {
   cursor: pointer;
   transition: background-color 0.2s ease;
 }

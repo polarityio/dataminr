@@ -82,7 +82,7 @@ const doLookup = async (entities, options, cb) => {
 
     Logger.trace({ alerts, searchableEntities });
 
-    const lookupResults = assembleLookupResults(entities, alerts, options);
+    const lookupResults = await assembleLookupResults(entities, alerts, options);
 
     Logger.trace({ lookupResults }, 'Lookup Results');
 
@@ -293,18 +293,19 @@ const onMessage = async (payload, options, cb) => {
         if (!alertToRender) {
           return cb({ detail: 'Missing alert in payload' });
         }
-        try {
-          const renderedHtml = renderAlertDetail(alertToRender);
-          Logger.debug({ alertId: alertToRender.alertId }, 'Rendered alert detail template');
-          cb(null, { html: renderedHtml });
-        } catch (error) {
-          const err = parseErrorToReadableJson(error);
-          Logger.error(
-            { error, formattedError: err, alertId: alertToRender.alertId },
-            'Failed to render alert detail template'
-          );
-          cb({ detail: error.message || 'Failed to render alert detail template', err });
-        }
+        renderAlertDetail(alertToRender, options)
+          .then((renderedHtml) => {
+            Logger.debug({ alertId: alertToRender.alertId }, 'Rendered alert detail template');
+            cb(null, { html: renderedHtml });
+          })
+          .catch((error) => {
+            const err = parseErrorToReadableJson(error);
+            Logger.error(
+              { error, formattedError: err, alertId: alertToRender.alertId },
+              'Failed to render alert detail template'
+            );
+            cb({ detail: error.message || 'Failed to render alert detail template', err });
+          });
         break;
 
       case 'renderAlertNotification':

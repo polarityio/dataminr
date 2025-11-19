@@ -8,40 +8,48 @@ const { processAlertData } = require('./templateRenderer');
  * @param {Array<Object>} entities - Array of entity objects
  * @param {Array<Object>} alerts - Array of alert results from API
  * @param {Object} options - Configuration options
- * @returns {Array<Object>} Array of lookup result objects with entity and data properties
+ * @returns {Promise<Array<Object>>} Array of lookup result objects with entity and data properties
  */
-const assembleLookupResults = (entities, alerts, options) =>
-  map((entity) => {
-    const resultsForThisEntity = getResultsForThisEntity(entity, alerts);
+const assembleLookupResults = async (entities, alerts, options) => {
+  const results = await Promise.all(
+    map(async (entity) => {
+      const resultsForThisEntity = await getResultsForThisEntity(entity, alerts, options);
 
-    const resultsFound = some(size, resultsForThisEntity);
+      const resultsFound = some(size, resultsForThisEntity);
 
-    const lookupResult = {
-      entity,
-      data: resultsFound
-        ? {
-            summary: createSummaryTags(resultsForThisEntity, options),
-            details: resultsForThisEntity
-          }
-        : null
-    };
+      const lookupResult = {
+        entity,
+        data: resultsFound
+          ? {
+              summary: createSummaryTags(resultsForThisEntity, options),
+              details: resultsForThisEntity
+            }
+          : null
+      };
 
-    return lookupResult;
-  }, entities);
+      return lookupResult;
+    }, entities)
+  );
+
+  return results;
+};
 
 /**
  * Get results for a specific entity
  * @param {Object} entity - Entity object to get results for
  * @param {Array<Object>} alerts - Array of alert results
- * @returns {Object} Object containing alerts array for the entity
+ * @param {Object} options - Configuration options
+ * @returns {Promise<Object>} Object containing alerts array for the entity
  */
-const getResultsForThisEntity = (entity, alerts) => {
+const getResultsForThisEntity = async (entity, alerts, options) => {
   const rawAlerts = getResultForThisEntity(entity, alerts);
   // Preprocess alerts for block.hbs template (which doesn't support helpers)
   const processedAlerts = Array.isArray(rawAlerts)
-    ? rawAlerts.map(function (alert) {
-        return processAlertData(alert);
-      })
+    ? await Promise.all(
+        rawAlerts.map(function (alert) {
+          return processAlertData(alert, options);
+        })
+      )
     : [];
   return {
     alerts: processedAlerts

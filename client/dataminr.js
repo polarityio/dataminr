@@ -21,61 +21,6 @@ if (!Array.prototype.at) {
   };
 }
 
-String.prototype.toTitleCase = function () {
-  // 1. Lowercase the entire string first to handle pre-capitalized letters (e.g., "PyThOn")
-  let s = this.toLowerCase();
-
-  // 2. Use a Regular Expression to find the first character of every 'word'.
-  //    The regex /\b\w/g matches:
-  //    - \b: a word boundary (the position between a word character and a non-word character)
-  //    - \w: a word character (a-z, A-Z, 0-9, including the underscore _)
-  //    - /g: global flag, ensuring all matches are found, not just the first one.
-  return s.replace(/\b\w/g, (char) => {
-    // Replace the matched character with its uppercase version
-    return char.toUpperCase();
-  });
-};
-
-/**
- * Utility function to get nested object properties safely, since Polarity doesn't support optional chaining (?.)
- * @param {Object} obj - The object to traverse
- * @param {string} path - Dot-separated path to the property
- * @param {*} defaultValue - Default value if path doesn't exist
- * @param {boolean} createIfMissing - If true, creates the structure if it doesn't exist (default: false)
- * @returns {*} The value at the path or default value
- */
-function getNested(obj, path, defaultValue = undefined, createIfMissing = false) {
-  if (!obj || !path) {
-    return defaultValue;
-  }
-
-  const keys = path.split('.');
-  let current = obj;
-
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-
-    if (current && current[key] !== undefined) {
-      current = current[key];
-    } else {
-      if (createIfMissing && i < keys.length - 1) {
-        // Create intermediate objects
-        current[key] = {};
-        current = current[key];
-      } else if (createIfMissing && i === keys.length - 1) {
-        // Create final property with default value
-        const finalValue = defaultValue !== undefined ? defaultValue : {};
-        current[key] = finalValue;
-        return current[key];
-      } else {
-        return defaultValue;
-      }
-    }
-  }
-
-  return current;
-}
-
 /**
  * Check if a value is an array
  * @param {*} value - Value to check
@@ -155,73 +100,6 @@ function fallbackCopyTextToClipboard(text) {
     console.error('Fallback: Unable to copy', err);
   }
   document.body.removeChild(textArea);
-}
-
-/**
- * Format timestamp to "h:mm A MMM DD, YYYY" format (e.g., "1:53 PM Jun 20, 2025")
- * @param {string|number} timestamp - Timestamp (ISO string, Unix timestamp, etc.)
- * @returns {string} Formatted timestamp string
- */
-function formatTimestamp(timestamp) {
-  if (!timestamp) return '';
-
-  let date;
-  if (typeof timestamp === 'number') {
-    // Unix timestamp (milliseconds)
-    date = new Date(timestamp);
-  } else if (typeof timestamp === 'string') {
-    // ISO string or other date string
-    date = new Date(timestamp);
-  } else {
-    return '';
-  }
-
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
-    return '';
-  }
-
-  // Format: "1:53 PM Jun 20, 2025"
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12; // 0 should be 12
-  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
-
-  const monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-  ];
-  const month = monthNames[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
-
-  return hours + ':' + minutesStr + ' ' + ampm + ' ' + month + ' ' + day + ', ' + year;
-}
-
-/**
- * Safe JSON parse with fallback
- * @param {string} text - JSON string to parse
- * @param {*} fallback - Fallback value if parsing fails
- * @returns {*} Parsed object or fallback
- */
-function safeParse(text, fallback) {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return fallback;
-  }
 }
 
 // ============================================================================
@@ -366,17 +244,21 @@ class DataminrIntegration {
   async initPolarityPin() {
     const notificationContainer = byId('notification-overlay-scroll-container');
     if (notificationContainer) {
-      const dataminrContainerClass = window.polarity
-        ? 'dataminr-container polarity-x-client'
-        : 'dataminr-container';
+      // Add pinned polarity container div before notificationContainer
+      let pinnedPolarityContainer = byId('polarity-pin-container');
+      if (!pinnedPolarityContainer) {
+        pinnedPolarityContainer = document.createElement('div');
+        pinnedPolarityContainer.id = 'polarity-pin-container';
+      }
 
-      // Add hello world div before notificationContainer
-      const pinnedPolarityContainer = document.createElement('div');
-      pinnedPolarityContainer.id = 'polarity-pin-container';
-      pinnedPolarityContainer.className = `${this.integrationId}-integration`;
+      // Add dataminr class div before dataminr container
+      const dataminrIntegrationClass = document.createElement('div');
+      dataminrIntegrationClass.className = `${this.integrationId}-integration`;
       const dataminrContainer = document.createElement('div');
       dataminrContainer.id = 'dataminr-container';
-      dataminrContainer.className = dataminrContainerClass;
+      dataminrContainer.className = window.polarity
+        ? 'dataminr-container polarity-x-client'
+        : 'dataminr-container';
 
       // Load notification HTML from backend template
       try {
@@ -402,7 +284,8 @@ class DataminrIntegration {
         dataminrContainer.innerHTML =
           '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-title">Dataminr Alert</span></div></div><div class="dataminr-body"></div></div>';
       }
-      pinnedPolarityContainer.appendChild(dataminrContainer);
+      dataminrIntegrationClass.appendChild(dataminrContainer);
+      pinnedPolarityContainer.appendChild(dataminrIntegrationClass);
       notificationContainer.parentNode.insertBefore(
         pinnedPolarityContainer,
         notificationContainer
@@ -588,17 +471,6 @@ class DataminrIntegration {
   }
 
   /**
-   * Get alert ID from alert object or generate one
-   * @private
-   * @param {Object} alert - Alert object
-   * @param {number} index - Index of the alert
-   * @returns {string} Alert ID
-   */
-  getAlertId(alert, index) {
-    return alert.alertId || 'alert-' + index;
-  }
-
-  /**
    * Get alert type from alert object
    * @private
    * @param {Object} alert - Alert object
@@ -696,12 +568,14 @@ class DataminrIntegration {
 
         // Build detail HTML (async)
         const detailHtml = await this.buildAlertDetailHtml(alert);
-        
+
         // Extract only the dataminr-alert-detail-content element to avoid extra containers from block.hbs
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = detailHtml;
         const contentElement = tempDiv.querySelector('.dataminr-alert-detail');
-        detailContainer.innerHTML = contentElement ? contentElement.innerHTML : detailHtml;
+        detailContainer.innerHTML = contentElement
+          ? contentElement.innerHTML
+          : detailHtml;
         detailsContainer.appendChild(detailContainer);
 
         // Add click handler for close icon
@@ -802,33 +676,6 @@ class DataminrIntegration {
         remainingButton.remove();
       }
     }
-  }
-
-  /**
-   * Build a single alert tag button HTML
-   * @private
-   * @param {Object} alert - Alert object
-   * @param {number} index - Index of the alert
-   * @returns {string} HTML string for tag button
-   */
-  buildSingleAlertTag(alert, index) {
-    const alertType = this.getAlertType(alert);
-    const headline = this.getAlertHeadline(alert);
-    const alertClass = 'dataminr-tag-' + this.normalizeAlertType(alertType);
-    const alertId = this.getAlertId(alert, index);
-
-    return `
-      <button class="dataminr-tag ${alertClass}" data-alert-id="${htmlEscape(
-      alertId
-    )}" data-alert-index="${index}" title="${htmlEscape(headline)}">
-        <div class="dataminr-alert-tag-text">
-          <span class="dataminr-tag-acronym">${htmlEscape(
-            this.userConfig.acronym
-          )}</span> 
-          <span class="dataminr-tag-headline">${htmlEscape(headline)}</span>
-        </div>
-      </button>
-    `;
   }
 
   /**
@@ -1039,166 +886,6 @@ class DataminrIntegration {
   }
 
   /**
-   * Process intel agents and group summaries by type
-   * @private
-   * @param {Array} intelAgents - Array of intel agent objects
-   * @returns {Array} Array of objects with type and summaries
-   */
-  processIntelAgents(intelAgents) {
-    const groupedSummaries = [];
-
-    intelAgents.forEach((agent) => {
-      if (agent.version === 'current' && agent.summary && agent.summary.length > 0) {
-        const summariesByType = {};
-        agent.summary.forEach((summaryItem) => {
-          if (summaryItem.type && summaryItem.type.length > 0) {
-            const type = summaryItem.type[0];
-            if (!summariesByType[type]) {
-              summariesByType[type] = [];
-            }
-            summariesByType[type].push(summaryItem);
-          }
-        });
-
-        Object.keys(summariesByType).forEach((type) => {
-          groupedSummaries.push({
-            type: type,
-            summaries: summariesByType[type]
-          });
-        });
-      }
-    });
-
-    return groupedSummaries;
-  }
-
-  /**
-   * Format type header text
-   * @private
-   * @param {string} type - Type string
-   * @returns {string} Formatted type header
-   */
-  formatTypeHeader(type) {
-    if (!type && typeof type !== 'string') {
-      return '';
-    }
-    return type.toTitleCase() + ' context';
-  }
-
-  /**
-   * Build HTML for alert detail linked alerts section
-   * @private
-   * @param {Object} alert - Alert object
-   * @returns {Promise<string>} HTML string for linked alerts section
-   */
-  async buildAlertDetailLinkedAlerts(alert) {
-    if (
-      !alert.linkedAlerts ||
-      !isArray(alert.linkedAlerts) ||
-      alert.linkedAlerts.length === 0
-    ) {
-      return '';
-    }
-
-    // Fetch full alert details for each linked alert
-    const linkedAlertPromises = alert.linkedAlerts.map((linkedAlertItem) => {
-      if (linkedAlertItem.parentAlertId) {
-        if (alert.alertId !== linkedAlertItem.parentAlertId) {
-          return this.getAlertById(linkedAlertItem.parentAlertId);
-        }
-      }
-      return Promise.resolve(null);
-    });
-
-    const linkedAlertsResults = await Promise.all(linkedAlertPromises);
-    const linkedAlerts = linkedAlertsResults.filter((alert) => alert !== null);
-
-    if (!linkedAlerts || linkedAlerts.length === 0) {
-      return '';
-    }
-
-    // Sort alerts by timestamp (most recent first)
-    linkedAlerts.sort((a, b) => {
-      const timeA = a.alertTimestamp ? new Date(a.alertTimestamp).getTime() : 0;
-      const timeB = b.alertTimestamp ? new Date(b.alertTimestamp).getTime() : 0;
-      return timeB - timeA;
-    });
-
-    let html = '<div class="dataminr-alert-linked-alerts">';
-    html += '<div class="dataminr-alert-linked-alerts-header">';
-    html += '<h3 class="dataminr-alert-linked-alerts-header-title">Event Timeline</h3>';
-    html += '</div>';
-    html += '<div class="dataminr-alert-linked-alerts-timeline">';
-
-    linkedAlerts.forEach((linkedAlert) => {
-      const timestamp = linkedAlert.alertTimestamp
-        ? formatTimestamp(linkedAlert.alertTimestamp)
-        : '';
-      const linkedAlertId = linkedAlert.alertId || '';
-
-      const headline = linkedAlert.headline || 'No headline available';
-      const alertType =
-        linkedAlert.publicPost && linkedAlert.publicPost.channels
-          ? linkedAlert.publicPost.channels[0]
-          : '';
-
-      // Get first image/photo from media if available
-      let imageUrl = '';
-      if (
-        linkedAlert.publicPost &&
-        linkedAlert.publicPost.media &&
-        isArray(linkedAlert.publicPost.media)
-      ) {
-        const imageMedia = linkedAlert.publicPost.media.find((media) => {
-          return media.type === 'image' || media.type === 'photo';
-        });
-        if (imageMedia && imageMedia.href) {
-          imageUrl = imageMedia.href;
-        }
-      }
-
-      const itemClass = linkedAlertId
-        ? 'dataminr-alert-linked-alerts-item dataminr-alert-linked-alerts-item-clickable'
-        : 'dataminr-alert-linked-alerts-item';
-      const itemAttrs = linkedAlertId
-        ? ` data-linked-alert-id="${htmlEscape(
-            linkedAlertId
-          )}" aria-label="View alert details" title="View alert details"`
-        : '';
-      html += `<div class="${itemClass}"${itemAttrs}>`;
-      html += `<div class="dataminr-alert-linked-alerts-item-time-container">`;
-      html += `<span class="dataminr-alert-linked-alerts-item-time">${htmlEscape(
-        timestamp
-      )}</span>`;
-      html += '</div>';
-      html += '<div class="dataminr-alert-linked-alerts-item-content">';
-      if (imageUrl) {
-        html += `<div class="dataminr-alert-linked-alerts-item-image-wrapper">`;
-        html += `<img class="dataminr-alert-linked-alerts-item-image" src="${htmlEscape(
-          imageUrl
-        )}" alt="Alert media" />`;
-        html += `</div>`;
-      }
-      html += `<span class="dataminr-alert-linked-alerts-item-headline">${htmlEscape(
-        headline
-      )}</span>`;
-
-      if (alertType && typeof alertType === 'string') {
-        html += `<div class="dataminr-alert-linked-alerts-item-type">${htmlEscape(
-          alertType.toTitleCase()
-        )}</div>`;
-      }
-
-      html += '</div>';
-      html += '</div>';
-    });
-
-    html += '</div>';
-    html += '</div>';
-    return html;
-  }
-
-  /**
    * Build HTML for alert detail container using backend template
    * @private
    * @param {Object} alert - Alert object
@@ -1225,38 +912,7 @@ class DataminrIntegration {
         result = response.data.attributes.payload;
       }
 
-      let detailHtml = result.html || '';
-
-      // Build linked alerts section separately (requires async fetching)
-      // This is done on the frontend since it needs to fetch additional alerts
-      const linkedAlertsHtml = await this.buildAlertDetailLinkedAlerts(alert);
-      if (linkedAlertsHtml) {
-        // Insert linked alerts before reference terms section, or before the closing div if no reference terms
-        const referenceTermsMarker = '<div class="dataminr-alert-reference-terms">';
-        const footerMarker = '<hr />';
-
-        if (detailHtml.indexOf(referenceTermsMarker) !== -1) {
-          // Insert before reference terms
-          detailHtml = detailHtml.replace(
-            referenceTermsMarker,
-            linkedAlertsHtml + referenceTermsMarker
-          );
-        } else if (detailHtml.indexOf(footerMarker) !== -1) {
-          // Insert before footer section
-          detailHtml = detailHtml.replace(footerMarker, linkedAlertsHtml + footerMarker);
-        } else {
-          // Insert before the last closing div (detail-content closing tag)
-          const lastDivIndex = detailHtml.lastIndexOf('</div>');
-          if (lastDivIndex !== -1) {
-            detailHtml =
-              detailHtml.substring(0, lastDivIndex) +
-              linkedAlertsHtml +
-              detailHtml.substring(lastDivIndex);
-          }
-        }
-      }
-
-      return detailHtml;
+      return result.html || '';
     } catch (error) {
       console.error('Error rendering alert detail template:', error);
       // Fallback to empty string or error message
@@ -1524,13 +1180,14 @@ class DataminrIntegration {
       return;
     }
 
-    console.log('Looking up alert from URL parameter:', alertId);
-
     try {
       const alert = await this.getAlertById(alertId);
 
       if (alert) {
-        console.log('Alert found from URL parameter:', alert);
+        console.log(
+          `Note: the API response for a single alert may not be cosnistant with the result returned from the alerts list.\nFor example, the listsMatched array is not included in the single alert response, but is included in the alerts list response like getAlerts().`
+        );
+        console.log('Looking up alert from URL parameter:', alertId, alert);
 
         // Store alert in Map
         this.currentAlerts.set(alertId, alert);
@@ -1755,9 +1412,7 @@ class DataminrIntegration {
       }
 
       // Handle linked alert item click
-      const linkedAlertItem = e.target.closest(
-        '.dataminr-alert-linked-alerts-item-clickable'
-      );
+      const linkedAlertItem = e.target.closest('.dataminr-alert-linked-alerts-item');
       if (linkedAlertItem) {
         e.preventDefault();
         e.stopPropagation();

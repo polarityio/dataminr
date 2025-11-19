@@ -1,3 +1,4 @@
+{{! Alert Template used for both Search and Notification Details Panels }}
 <div class="dataminr-alert-search-details">
   {{#if (eq details.alerts.length 10)}}
     <div>
@@ -289,7 +290,12 @@
                   >Discovered Entities ({{alert.discoveredEntities.length}})</div>
                   <div class="dataminr-alert-intel-agents-discovered-entities-list">
                     {{#each alert.discoveredEntities as |entity|}}
-                      <span class="dataminr-alert-intel-agents-discovered-entity-item">
+                      <a
+                        href="{{entity.url}}"
+                        class="dataminr-alert-intel-agents-discovered-entity-item"
+                        target="_blank"
+                        title="View entity in Dataminr"
+                      >
                         <svg height="22" width="22" viewBox="0 0 24 24" fill="none">
                           <path
                             d="M6.2625 18.0125C7.77083 20.0875 9.68333 21.4167 12 22C14.3167 21.4167 16.2292 20.0875 17.7375 18.0125C19.2458 15.9375 20 13.6333 20 11.1V5L12 2L4 5V11.1C4 13.6333 4.75417 15.9375 6.2625 18.0125ZM16.3 16.6C15.1667 18.25 13.7333 19.35 12 19.9C10.2667 19.35 8.83333 18.25 7.7 16.6C6.56667 14.95 6 13.1167 6 11.1V6.375L12 4.125L18 6.375V11.1C18 13.1167 17.4333 14.95 16.3 16.6ZM11 14V16H13V14H11ZM11 8V12H13V8H11Z"
@@ -297,7 +303,7 @@
                           ></path>
                         </svg>
                         {{entity.name}}
-                      </span>
+                      </a>
                     {{/each}}
                   </div>
                 </div>
@@ -434,7 +440,7 @@
           </div>
         {{/if}}
 
-        {{! Linked Alerts Section - Note: This will be rendered separately on the frontend since it requires async fetching }}
+        {{! Linked Alerts Section }}
         {{#if alert.linkedAlerts}}
           <div class="dataminr-alert-linked-alerts">
             <div class="dataminr-alert-linked-alerts-header">
@@ -443,8 +449,7 @@
             <div class="dataminr-alert-linked-alerts-timeline">
               {{#each alert.linkedAlerts as |linkedAlert|}}
                 <div
-                  class="{{linkedAlert.className}}
-                    dataminr-alert-linked-alerts-item-clickable"
+                  class="dataminr-alert-linked-alerts-item"
                   data-linked-alert-id="{{linkedAlert.alertId}}"
                   aria-label="View alert details"
                   title="View alert details"
@@ -495,8 +500,16 @@
         {{/if}}
 
         {{! Footer Section (Companies, Sectors, Topics) }}
-        {{#if (or alert.alertCompanies alert.alertSectors alert.alertTopics)}}
+        {{#if (or alert.alertCompanies alert.alertSectors alert.alertTopics alert.listsMatched)}}
           <hr />
+          {{#if alert.listsMatched}}
+            <div class="dataminr-alert-lists-matched">
+              <span class="dataminr-alert-lists-matched-label">Lists:</span>
+              <span
+                class="dataminr-alert-lists-matched-list"
+              >{{alert.listsMatchedFormatted}}</span>
+            </div>
+          {{/if}}
           {{#if alert.alertCompanies}}
             <div class="dataminr-alert-companies">
               <span class="dataminr-alert-companies-label">Companies:</span>

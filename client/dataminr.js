@@ -338,6 +338,10 @@ class DataminrIntegration {
           const icon = e.target.closest('.dataminr-alert-icon');
           if (icon) {
             e.stopPropagation(); // Prevent header toggle
+            // Don't allow filtering if count is 0 or icon is hidden
+            if (icon.style.display === 'none' || parseInt(icon.textContent, 10) === 0) {
+              return;
+            }
             const alertType = icon.getAttribute('data-alert-type');
             if (alertType) {
               this.filterAlertsByType(alertType);

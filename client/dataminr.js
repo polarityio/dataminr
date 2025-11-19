@@ -219,6 +219,7 @@ class DataminrIntegration {
     this.currentAlerts = new Map(); // Map of alertId -> alert object
     this.lastQueryTimestamp = null; // ISO timestamp of last query
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
+    this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
 
     // Initialize the application
     this.init();
@@ -282,7 +283,7 @@ class DataminrIntegration {
         console.error('Error rendering alert notification template:', error);
         // Fallback to empty content if template rendering fails
         dataminrContainer.innerHTML =
-          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-title">Dataminr Alert</span></div></div><div class="dataminr-body"></div></div>';
+          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">Dataminr Alert</span></div></div><div class="dataminr-body"></div></div>';
       }
       dataminrIntegrationClass.appendChild(dataminrContainer);
       pinnedPolarityContainer.appendChild(dataminrIntegrationClass);
@@ -327,6 +328,21 @@ class DataminrIntegration {
         clearAllButton.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent header toggle
           this.clearAllAlerts();
+        });
+      }
+
+      // Set up event delegation for alert type filter buttons
+      const alertIconsContainer = dataminrContainer.querySelector('.dataminr-alert-icons-container');
+      if (alertIconsContainer) {
+        alertIconsContainer.addEventListener('click', (e) => {
+          const icon = e.target.closest('.dataminr-alert-icon');
+          if (icon) {
+            e.stopPropagation(); // Prevent header toggle
+            const alertType = icon.getAttribute('data-alert-type');
+            if (alertType) {
+              this.filterAlertsByType(alertType);
+            }
+          }
         });
       }
     }
@@ -856,6 +872,9 @@ class DataminrIntegration {
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
       flashIcon.style.display = counts.flash > 0 ? 'inline-block' : 'none';
+      // Make it clickable and update opacity based on filter
+      flashIcon.style.cursor = 'pointer';
+      flashIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Flash' ? '1' : '0.5';
     }
 
     // Update Urgent count
@@ -863,6 +882,9 @@ class DataminrIntegration {
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
       urgentIcon.style.display = counts.urgent > 0 ? 'inline-block' : 'none';
+      // Make it clickable and update opacity based on filter
+      urgentIcon.style.cursor = 'pointer';
+      urgentIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Urgent' ? '1' : '0.5';
     }
 
     // Update Alert count
@@ -870,6 +892,9 @@ class DataminrIntegration {
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
       alertIcon.style.display = counts.alert > 0 ? 'inline-block' : 'none';
+      // Make it clickable and update opacity based on filter
+      alertIcon.style.cursor = 'pointer';
+      alertIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Alert' ? '1' : '0.5';
     }
 
     // Show/hide clear button based on total alert count
@@ -925,8 +950,31 @@ class DataminrIntegration {
   }
 
   /**
+   * Filter alerts by type and update display
+   * @private
+   * @param {string|null} alertType - Alert type to filter by ('Flash', 'Urgent', 'Alert'), or null for all
+   */
+  filterAlertsByType(alertType) {
+    // Toggle filter: if clicking the same type, show all
+    if (this.currentFilter === alertType) {
+      this.currentFilter = null;
+    } else {
+      this.currentFilter = alertType;
+    }
+
+    // Update display with current alerts and filter
+    this.updateAlertsDisplay(this.currentAlerts, false);
+
+    // Update button opacities
+    this.updateAlertCount();
+  }
+
+  /**
    * Update alerts display in UI
    * @private
+   * @param {Array|Map} alerts - Alerts to display
+   * @param {boolean} showAll - Whether to show all alerts
+   * @returns {Promise<void>}
    */
   async updateAlertsDisplay(alerts, showAll = false) {
     const bodyElement = document.querySelector('.dataminr-body');
@@ -953,13 +1001,26 @@ class DataminrIntegration {
     }
 
     // Convert Map to array for iteration
-    const alertsArray = Array.from(this.currentAlerts.values());
+    let alertsArray = Array.from(this.currentAlerts.values());
+
+    // Apply filter if one is active
+    if (this.currentFilter) {
+      alertsArray = alertsArray.filter((alert) => {
+        const alertType = this.getAlertType(alert);
+        return alertType === this.currentFilter;
+      });
+    }
 
     // Check if alerts list container exists
     let alertsListContainer = bodyElement.querySelector('.dataminr-alerts-list');
 
-    // If container doesn't exist, build it from scratch
-    if (!alertsListContainer || showAll) {
+    // Always rebuild if filtering is active or container doesn't exist or showAll is true
+    // This ensures filtered alerts are properly displayed
+    if (!alertsListContainer || showAll || this.currentFilter !== null) {
+      // Clear existing container if it exists
+      if (alertsListContainer) {
+        alertsListContainer.remove();
+      }
       // If there are more than maxVisibleTags alerts, show maxVisibleTags - 1 to leave room for "+ remaining" button
       // Otherwise, show all alerts
       const maxToShow =

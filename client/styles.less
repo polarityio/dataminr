@@ -156,16 +156,20 @@ img {
   gap: 5px;
 }
 
+.dataminr-notification-header-title {
+  padding-right: 3px;
+}
+
 .dataminr-alert-icons-container {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .dataminr-alert-icon {
   border-radius: 3px;
-  height: 14px;
-  line-height: 14px;
+  height: 16px;
+  line-height: 16px;
   padding: 0 5px;
   text-align: center;
   font-size: 10px;
@@ -173,6 +177,14 @@ img {
   font-family: 'Inter', sans-serif;
   vertical-align: middle;
   color: @color-text-dark;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  user-select: none;
+  min-width: 20px;
+
+  &:hover {
+    opacity: 0.8 !important;
+  }
 }
 
 .dataminr-alert-icon-flash {

@@ -715,7 +715,6 @@ async function processAlertData(alert, options) {
     alertTimestampFormatted: formatTimestampValue(alert.alertTimestamp),
     headline: alert.headline || 'No headline available',
     dataminrAlertUrl: alert.dataminrAlertUrl || null,
-    hasAIContent: !!(alert.liveBrief || alert.intelAgents),
     estimatedEventLocation: alert.estimatedEventLocation || null,
     subHeadline: alert.subHeadline || null,
     publicPost: alert.publicPost || null,
@@ -753,6 +752,8 @@ async function processAlertData(alert, options) {
       processed.discoveredEntities = intelAgentsData.discoveredEntities;
     }
   }
+  
+  processed.hasAIContent = !!(processed.liveBrief || processed.intelAgentsGrouped);
 
   // Process public post media
   const mediaData = processMedia(alert);

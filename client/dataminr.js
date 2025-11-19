@@ -290,7 +290,11 @@ class DataminrIntegration {
         pinnedPolarityContainer,
         notificationContainer
       );
-      notificationContainer.style.paddingBottom = '15px';
+      if (!window.polarity) {
+        // Add a margin-bottom of 0.5rem (8px) to the notification container for web client
+        notificationContainer.classList.add('mb-2');
+      }
+      
 
       // Add click handler to toggle body visibility - entire header is clickable
       const headerElement = dataminrContainer.querySelector('.dataminr-header');

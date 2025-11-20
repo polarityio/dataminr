@@ -117,9 +117,9 @@ class PolarityUtils {
    */
   constructor() {
     this.integrationMessenger = null;
-    this._notificationCallbacksByName = new Map(); // Map name -> callback
-    this._notificationObserverInitialized = false;
-    this._notificationWindowRemoved = false;
+    this._settingsChangeCallbacks = new Map(); // Map name -> callback
+    this._settingsChangeObserverInitialized = false;
+    this._enterSettings = false;
   }
 
   /**
@@ -197,37 +197,40 @@ class PolarityUtils {
   }
 
   /**
-   * Setup observer for notification window changes
-   * @param {Function} callback - Callback function to trigger on changes - hasChanged (true/false)
+   * Setup observer for settings window changes
+   * @param {Function} callback - Callback function to trigger on changes - enterSettings (true/false)
    * @param {string} name - Unique name identifier for this callback (prevents duplicates from same class)
    * @returns {void}
    */
-  onSettingsChange(callback, name = 'anonymous') {
-    if (typeof callback !== "function" || !name) {
+  onSettingsChange(callback, name) {
+    if (typeof callback !== 'function' || !name) {
+      console.error(
+        'Invalid callback or name provided to PolarityUtils.onSettingsChange'
+      );
       return;
     }
 
     // Store the callback by name (will override if name already exists)
-    this._notificationCallbacksByName.set(name, callback);
+    this._settingsChangeCallbacks.set(name, callback);
 
-    if (this._notificationObserverInitialized) return;
+    if (this._settingsChangeObserverInitialized) return;
 
-    const markRemovedFlag = (mutations) => {
+    const markRemovedFlag = async (mutations) => {
       for (let i = 0; i < mutations.length; i++) {
         const mutation = mutations[i];
-        
+
         // Detect removals - entering settings
         if (mutation.removedNodes && mutation.removedNodes.length > 0) {
           for (let r = 0; r < mutation.removedNodes.length; r++) {
             const removed = mutation.removedNodes[r];
             if (removed.nodeType === 1) {
               if (
-                (removed.id && removed.id === "notification-window") ||
-                (removed.querySelector &&
-                  removed.querySelector("#notification-window"))
+                (removed.id && removed.id === 'notification-window') ||
+                (removed.querySelector && removed.querySelector('#search-query'))
               ) {
-                this._notificationWindowRemoved = true;
-                this._notificationCallbacksByName.forEach(cb => cb(false));
+                this._enterSettings = true;
+                this._settingsChangeCallbacks.forEach((cb) => cb(this._enterSettings));
+                return;
               }
             }
           }
@@ -239,15 +242,12 @@ class PolarityUtils {
             const added = mutation.addedNodes[a];
             if (added.nodeType === 1) {
               const isNotificationWindow =
-                (added.id && added.id === "notification-window") ||
-                (added.querySelector &&
-                  added.querySelector("#notification-window"));
-              if (
-                isNotificationWindow &&
-                this._notificationWindowRemoved
-              ) {
-                 this._notificationWindowRemoved = false;
-                 this._notificationCallbacksByName.forEach(cb => cb(true));
+                (added.id && added.id === 'notification-window') ||
+                (added.querySelector && added.querySelector('#search-query'));
+              if (isNotificationWindow && this._enterSettings) {
+                this._enterSettings = false;
+                this._settingsChangeCallbacks.forEach((cb) => cb(this._enterSettings));
+                return;
               }
             }
           }
@@ -259,32 +259,15 @@ class PolarityUtils {
       try {
         const observer = new MutationObserver(markRemovedFlag);
         observer.observe(container, { childList: true, subtree: true });
-        this._notificationObserverInitialized = true;
+        this._settingsChangeObserverInitialized = true;
       } catch (e) {
         // Silently ignore observer errors
       }
     };
 
-    const container = document.getElementById("search-container");
+    const container = document.getElementsByClassName('liquid-container')[0];
     if (container) {
       attachObserverToContainer(container);
-      return;
-    }
-
-    // If #search-container does not yet exist, observe body until it appears
-    try {
-      const waitObserver = new MutationObserver((mutations, obs) => {
-        const c = document.getElementById("search-container");
-        if (c) {
-          attachObserverToContainer(c);
-          if (obs && obs.disconnect) obs.disconnect();
-        }
-      });
-      if (document.body) {
-        waitObserver.observe(document.body, { childList: true, subtree: true });
-      }
-    } catch (e) {
-      // Silently ignore observer errors
     }
   }
 }
@@ -390,7 +373,6 @@ class DataminrIntegration {
         // Add a margin-bottom of 0.5rem (8px) to the notification container for web client
         notificationContainer.classList.add('mb-2');
       }
-      
 
       // Add click handler to toggle body visibility - entire header is clickable
       const headerElement = dataminrContainer.querySelector('.dataminr-header');
@@ -427,7 +409,9 @@ class DataminrIntegration {
       }
 
       // Set up event delegation for alert type filter buttons
-      const alertIconsContainer = dataminrContainer.querySelector('.dataminr-alert-icons-container');
+      const alertIconsContainer = dataminrContainer.querySelector(
+        '.dataminr-alert-icons-container'
+      );
       if (alertIconsContainer) {
         alertIconsContainer.addEventListener('click', (e) => {
           const icon = e.target.closest('.dataminr-alert-icon');
@@ -973,7 +957,8 @@ class DataminrIntegration {
       flashIcon.style.display = counts.flash > 0 ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
-      flashIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Flash' ? '1' : '0.5';
+      flashIcon.style.opacity =
+        this.currentFilter === null || this.currentFilter === 'Flash' ? '1' : '0.5';
     }
 
     // Update Urgent count
@@ -983,7 +968,8 @@ class DataminrIntegration {
       urgentIcon.style.display = counts.urgent > 0 ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
-      urgentIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Urgent' ? '1' : '0.5';
+      urgentIcon.style.opacity =
+        this.currentFilter === null || this.currentFilter === 'Urgent' ? '1' : '0.5';
     }
 
     // Update Alert count
@@ -993,7 +979,8 @@ class DataminrIntegration {
       alertIcon.style.display = counts.alert > 0 ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
-      alertIcon.style.opacity = this.currentFilter === null || this.currentFilter === 'Alert' ? '1' : '0.5';
+      alertIcon.style.opacity =
+        this.currentFilter === null || this.currentFilter === 'Alert' ? '1' : '0.5';
     }
 
     // Show/hide clear button based on total alert count
@@ -1621,22 +1608,15 @@ class DataminrIntegration {
 function initDataminr(integration, userConfig, userOptions) {
   if (!userConfig.subscribed) return;
 
-  if (!window.PolarityUtils || typeof window.PolarityUtils.onSettingsChange !== 'function') {
+  if (!window.PolarityUtils) {
     window.PolarityUtils = new PolarityUtils();
   }
 
   if (!window.Dataminr) {
     window.Dataminr = new DataminrIntegration(integration, userConfig, userOptions);
-  } else {
-    window.Dataminr.init();
-  }
-
-  if (window.polarity) {
-    // Set up observer to re-init when #notification-window is re-added
-    // It is removed when the user goes into preferences or subscription settings
-    // Use 'DataminrIntegration' as the name to prevent duplicates on reload
-    window.PolarityUtils.onSettingsChange((hasChanged) => {
-      if (hasChanged) {
+    // Set up observer to re-init onSettingsChange
+    window.PolarityUtils.onSettingsChange((enterSettings) => {
+      if (!enterSettings) {
         window.Dataminr.init();
       }
     }, 'DataminrIntegration');

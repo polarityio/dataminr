@@ -141,6 +141,51 @@ class PolarityUtils {
   }
 
   /**
+   * Get the search data service
+   * @returns {Object|null} The search data service instance or null if not found
+   */
+  getSearchData() {
+    return this.getEmberService('search-data');
+  }
+
+  /**
+   * Get the current user
+   * @returns {Object|null} The current user or null if not found
+   */
+  getCurrentUser() {
+    const currentUserService = this.getEmberService('currentUser');
+    return currentUserService ? currentUserService.get('user') : null;
+  }
+
+  /**
+   * Get the integrations
+   * @returns {Object|null} The integrations or null if not found
+   */
+  getIntegrations() {
+    const integrationLoader = this.getEmberService('integration-loader');
+    return integrationLoader ? integrationLoader.get('integrations') : null;
+  }
+
+  /**
+   * Get an integration by ID
+   * @param {string} integrationId - ID of the integration to retrieve
+   * @returns {Object|null} The integration or null if not found
+   */
+  getIntegrationById(integrationId) {
+    const integrations = this.getIntegrations();
+    return integrations ? integrations[integrationId] : null;
+  }
+
+  /**
+   * Get the notification list
+   * @returns {Array|null} The notification list or null if not found
+   */
+  getNotificationList() {
+    const notificationsData = this.getEmberService('notificationsData');
+    return notificationsData ? notificationsData.getNotificationList() : null;
+  }
+
+  /**
    * Send a message to the integration backend
    * @param {Object} payload - The message payload
    * @param {string} payload.action - The action to perform
@@ -288,9 +333,9 @@ class DataminrIntegration {
    */
   constructor(integration, userConfig, userOptions) {
     this.integration = integration;
+    this.integrationId = integration.type;
     this.userConfig = userConfig;
     this.userOptions = userOptions;
-    this.integrationId = integration.type;
     this.pollingInterval = null;
     this.pollIntervalMs = 10000; // Poll Polarity server every 10 seconds
     this.currentUser = null;
@@ -371,10 +416,6 @@ class DataminrIntegration {
         pinnedPolarityContainer,
         notificationContainer
       );
-      if (!window.polarity) {
-        // Add a margin-bottom of 0.5rem (8px) to the notification container for web client
-        notificationContainer.classList.add('mb-2');
-      }
 
       // Add click handler to toggle body visibility - entire header is clickable
       const headerElement = dataminrContainer.querySelector('.dataminr-header');
@@ -632,7 +673,7 @@ class DataminrIntegration {
       // If detail container doesn't exist, create it dynamically
       if (!detailContainer) {
         let alert = this.currentAlertCache.get(alertId);
-        
+
         // If not in cache, fetch full alert data
         if (!alert) {
           try {
@@ -888,10 +929,12 @@ class DataminrIntegration {
       });
 
       // Find alerts that aren't displayed yet
-      const availableAlerts = Array.from(this.currentAlertIds.values()).filter((alert) => {
-        const id = alert.alertId || '';
-        return id && !displayedAlertIds.has(id);
-      });
+      const availableAlerts = Array.from(this.currentAlertIds.values()).filter(
+        (alert) => {
+          const id = alert.alertId || '';
+          return id && !displayedAlertIds.has(id);
+        }
+      );
 
       // Add next alert(s) up to maxVisibleTags visible tags
       const visibleCount = visibleTagButtons.length;
@@ -1051,18 +1094,18 @@ class DataminrIntegration {
     try {
       // Get browser timezone
       const timezone = this.getBrowserTimezone();
-      
+
       // Request rendered HTML from backend
       const payload = {
         action: 'renderAlertDetail',
         alert: alert
       };
-      
+
       // Add timezone to payload if available
       if (timezone) {
         payload.timezone = timezone;
       }
-      
+
       const response = await this.sendIntegrationMessage(payload);
 
       // Handle response format (could be direct or wrapped in data.attributes.payload)
@@ -1464,14 +1507,17 @@ class DataminrIntegration {
    * @private
    */
   async init() {
+    setTimeout(() => {
+      // The user options seem to have a delayed update, so we need to check again
+      if (this.userOptions !== this.integration['userOptions']) {
+        this.userOptions = this.integration['userOptions'];
+        this.init();
+      }
+    }, 1000);
+
     const dataminrContainer = byId('dataminr-container');
-    if (dataminrContainer) return;
-
-    const wpu = window.PolarityUtils;
-    const currentUserService = wpu ? wpu.getEmberService('currentUser') : null;
-    this.currentUser = currentUserService ? currentUserService.get('user') : null;
-
-    if (this.userOptions.stickyAlerts) {
+    if (!dataminrContainer && this.userOptions && this.userOptions.stickyAlerts) {
+      this.currentUser = window.PolarityUtils.getCurrentUser();
       await this.initPolarityPin();
 
       // Set up event delegation for copy buttons (works with dynamically created content)
@@ -1481,12 +1527,17 @@ class DataminrIntegration {
       setTimeout(() => {
         this.startPolling();
       }, 1000);
-    }
 
-    // Look up alert from URL parameter if present (fire and forget)
-    this.lookupAlertFromUrl().catch(function (error) {
-      console.error('Error in lookupAlertFromUrl:', error);
-    });
+      // Look up alert from URL parameter if present (fire and forget)
+      this.lookupAlertFromUrl().catch(function (error) {
+        console.error('Error in lookupAlertFromUrl:', error);
+      });
+    } else if (this.userOptions && !this.userOptions.stickyAlerts) {
+      if (dataminrContainer) {
+        dataminrContainer.remove();
+      }
+      this.stopPolling();
+    }
   }
 
   /**
@@ -1651,7 +1702,7 @@ class DataminrIntegration {
    * @private
    * @param {Object} alert - Alert object
    */
-  processNewAlert(alert, poll=false) {
+  processNewAlert(alert, poll = false) {
     if (!alert) return;
 
     const alertId = alert.alertId;
@@ -1668,7 +1719,6 @@ class DataminrIntegration {
         this.currentAlertCache.delete(firstKey);
       }
     }
-    
 
     // Add to lightweight IDs map
     this.currentAlertIds.set(alertId, {
@@ -1684,7 +1734,6 @@ class DataminrIntegration {
  * Initialize the Dataminr integration (called by onSettingsChange)
  * @param {Object} integration - The integration object
  * @param {Object} userConfig - User configuration object
- * @param {boolean} userConfig.subscribed - Whether user is subscribed to alerts
  * @param {Object} userOptions - User options object
  * @returns {void}
  */

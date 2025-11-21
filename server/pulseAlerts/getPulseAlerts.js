@@ -5,6 +5,7 @@ const {
 
 const { requestWithDefaults } = require('../request');
 const { MAX_PAGE_SIZE } = require('../constants');
+const { getCachedAlerts } = require('./stateManager');
 
 /**
  * Get Pulse alerts from the API with pagination support
@@ -59,7 +60,7 @@ const getPulseAlerts = async (options, paginationCursor = null, count = null, si
       method: 'GET'
     });
 
-    let alerts = response.body.alerts || [];
+    let alerts = (response.body && response.body.alerts) || [];
 
     // Filter alerts by timestamp if sinceTimestamp is provided and count is not (count overrides timestamp)
     if (sinceTimestamp && !count) {
@@ -88,8 +89,8 @@ const getPulseAlerts = async (options, paginationCursor = null, count = null, si
 
     return {
       alerts: alerts,
-      nextPage: response.body.nextPage || null,
-      previousPage: response.body.previousPage || null
+      nextPage: (response.body && response.body.nextPage) || null,
+      previousPage: (response.body && response.body.previousPage) || null
     };
   } catch (error) {
     const err = parseErrorToReadableJson(error);
@@ -118,6 +119,14 @@ const getPulseAlertById = async (alertId, options) => {
 
   if (!alertId) {
     throw new Error('Alert ID is required');
+  }
+
+  const cachedAlerts = getCachedAlerts();
+  const cachedAlert = cachedAlerts.find((alert) => alert.alertId === alertId);
+
+  if (cachedAlert) {
+    Logger.debug({ alertId }, 'Alert found in cache');
+    return cachedAlert;
   }
 
   try {

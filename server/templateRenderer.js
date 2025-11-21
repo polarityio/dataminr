@@ -66,9 +66,10 @@ registerHelpers();
 /**
  * Format timestamp helper function (used in preprocessing)
  * @param {string|number} timestamp - Timestamp to format
- * @returns {string} Formatted timestamp
+ * @param {string} [timezone] - Optional timezone (e.g., 'America/New_York', 'UTC')
+ * @returns {string} Formatted timestamp with timezone indicator
  */
-function formatTimestampValue(timestamp) {
+function formatTimestampValue(timestamp, timezone) {
   if (!timestamp) return '';
 
   let date;
@@ -84,32 +85,84 @@ function formatTimestampValue(timestamp) {
     return '';
   }
 
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
+  // Format date with timezone if provided
+  let formattedDate;
+  let timezoneLabel = '';
 
-  const monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-  ];
-  const month = monthNames[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
+  if (timezone) {
+    try {
+      // Use Intl.DateTimeFormat to format with timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      formattedDate = formatter.format(date);
+      
+      // Get timezone abbreviation (e.g., EST, PST, UTC)
+      const tzFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        timeZoneName: 'short'
+      });
+      const parts = tzFormatter.formatToParts(date);
+      const tzPart = parts.find(part => part.type === 'timeZoneName');
+      timezoneLabel = tzPart ? ' ' + tzPart.value : '';
+    } catch (error) {
+      // Fallback to default formatting if timezone is invalid
+      console.error('Invalid timezone:', timezone, error);
+      formattedDate = null;
+    }
+  }
 
-  return hours + ':' + minutesStr + ' ' + ampm + ' ' + month + ' ' + day + ', ' + year;
+  // Fallback to original formatting if no timezone or timezone formatting failed
+  if (!formattedDate) {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
+
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+
+    formattedDate = hours + ':' + minutesStr + ' ' + ampm + ' ' + month + ' ' + day + ', ' + year;
+    
+    // If no timezone provided, indicate what timezone is being displayed (local time)
+    if (!timezone) {
+      try {
+        const localTzFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZoneName: 'short'
+        });
+        const localParts = localTzFormatter.formatToParts(date);
+        const localTzPart = localParts.find(part => part.type === 'timeZoneName');
+        timezoneLabel = localTzPart ? ' (' + localTzPart.value + ')' : '';
+      } catch (error) {
+        // Ignore error, just don't show timezone
+      }
+    }
+  }
+
+  return formattedDate + timezoneLabel;
 }
 
 /**
@@ -337,9 +390,10 @@ function processMetadata(alert) {
 /**
  * Process live brief from alert
  * @param {Object} alert - Alert object
+ * @param {string} [timezone] - Optional timezone for timestamp formatting
  * @returns {Object|null} Processed live brief data or null
  */
-function processLiveBrief(alert) {
+function processLiveBrief(alert, timezone) {
   if (!alert.liveBrief || !Array.isArray(alert.liveBrief)) {
     return null;
   }
@@ -359,7 +413,7 @@ function processLiveBrief(alert) {
       version: lb.version,
       summary: lb.summary || '',
       timestamp: lb.timestamp || '',
-      timestampFormatted: formatTimestampValue(lb.timestamp),
+      timestampFormatted: formatTimestampValue(lb.timestamp, timezone),
       title: title
     };
   });
@@ -567,9 +621,10 @@ function processMedia(alert) {
 /**
  * Process a single linked alert
  * @param {Object} linkedAlert - Linked alert object
+ * @param {string} [timezone] - Optional timezone for timestamp formatting
  * @returns {Object} Processed linked alert object
  */
-function processSingleLinkedAlert(linkedAlert) {
+function processSingleLinkedAlert(linkedAlert, timezone) {
   const alertType =
     linkedAlert.publicPost && linkedAlert.publicPost.channels
       ? linkedAlert.publicPost.channels[0]
@@ -593,7 +648,7 @@ function processSingleLinkedAlert(linkedAlert) {
   return {
     alertId: linkedAlert.alertId || '',
     alertTimestamp: linkedAlert.alertTimestamp || '',
-    alertTimestampFormatted: formatTimestampValue(linkedAlert.alertTimestamp),
+    alertTimestampFormatted: formatTimestampValue(linkedAlert.alertTimestamp, timezone),
     headline: linkedAlert.headline || 'No headline available',
     alertType: alertType,
     alertTypeFormatted: toTitleCaseValue(alertType),
@@ -605,9 +660,10 @@ function processSingleLinkedAlert(linkedAlert) {
  * Process linked alerts from alert
  * @param {Object} alert - Alert object
  * @param {Object} options - Options object
+ * @param {string} [timezone] - Optional timezone for timestamp formatting
  * @returns {Promise<Array<Object>|null>} Processed linked alerts array or null
  */
-async function processLinkedAlerts(alert, options) {
+async function processLinkedAlerts(alert, options, timezone) {
   if (
     !alert.linkedAlerts ||
     !Array.isArray(alert.linkedAlerts) ||
@@ -641,7 +697,9 @@ async function processLinkedAlerts(alert, options) {
   }
 
   // Process each linked alert
-  const processedLinkedAlerts = linkedAlerts.map(processSingleLinkedAlert);
+  const processedLinkedAlerts = linkedAlerts.map(function (linkedAlert) {
+    return processSingleLinkedAlert(linkedAlert, timezone);
+  });
 
   // Sort alerts by timestamp (most recent first)
   processedLinkedAlerts.sort(function (a, b) {
@@ -694,6 +752,32 @@ function processReferenceTerms(alert) {
 }
 
 /**
+ * Extract timezone from options (payload, request headers, or options object)
+ * @param {Object} options - Options object that may contain timezone
+ * @returns {string|undefined} Timezone string or undefined
+ */
+function extractTimezone(options) {
+  if (!options) {
+    return undefined;
+  }
+
+  // Check payload first (from client request) - this is set when timezone is passed from client
+  if (options.timezone) {
+    return options.timezone;
+  }
+
+  // Check request headers (e.g., X-Timezone header)
+  if (options._request && options._request.headers) {
+    const tzHeader = options._request.headers['x-timezone'] || options._request.headers['X-Timezone'];
+    if (tzHeader) {
+      return tzHeader;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Process alert data for template rendering (preprocesses all helper-dependent values)
  * @param {Object} alert - Alert object
  * @param {Object} options - Options object
@@ -704,6 +788,9 @@ async function processAlertData(alert, options) {
     return null;
   }
 
+  // Extract timezone from options
+  const timezone = extractTimezone(options);
+
   const alertTypeName =
     alert.alertType && alert.alertType.name ? alert.alertType.name : 'Alert';
 
@@ -712,7 +799,7 @@ async function processAlertData(alert, options) {
     alertType: alertTypeName,
     alertTypeNormalized: normalizeAlertTypeValue(alertTypeName),
     alertTimestamp: alert.alertTimestamp || '',
-    alertTimestampFormatted: formatTimestampValue(alert.alertTimestamp),
+    alertTimestampFormatted: formatTimestampValue(alert.alertTimestamp, timezone),
     headline: alert.headline || 'No headline available',
     dataminrAlertUrl: alert.dataminrAlertUrl || null,
     estimatedEventLocation: alert.estimatedEventLocation || null,
@@ -735,7 +822,7 @@ async function processAlertData(alert, options) {
   };
 
   // Process live brief
-  const liveBriefData = processLiveBrief(alert);
+  const liveBriefData = processLiveBrief(alert, timezone);
   if (liveBriefData) {
     processed.liveBrief = liveBriefData.liveBrief;
     processed.liveBriefCopyText = liveBriefData.liveBriefCopyText;
@@ -764,7 +851,7 @@ async function processAlertData(alert, options) {
   // Process linked alerts - currently disabled as the API is not fully implemented
   processed.linkedAlerts = null;
   /*   
-  const linkedAlertsData = await processLinkedAlerts(alert, options);
+  const linkedAlertsData = await processLinkedAlerts(alert, options, timezone);
   if (linkedAlertsData) {
     processed.linkedAlerts = linkedAlertsData;
   }

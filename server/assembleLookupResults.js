@@ -14,9 +14,7 @@ const assembleLookupResults = async (entities, alerts, options) => {
   const results = await Promise.all(
     map(async (entity) => {
       const resultsForThisEntity = await getResultsForThisEntity(entity, alerts, options);
-
       const resultsFound = some(size, resultsForThisEntity);
-
       const lookupResult = {
         entity,
         data: resultsFound

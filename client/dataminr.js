@@ -197,7 +197,7 @@ class PolarityUtils {
   }
 
   /**
-   * Setup observer for settings window changes
+   * Setup observer for settings window changes - hacky but more reliable for web/client than the global function
    * @param {Function} callback - Callback function to trigger on changes - enterSettings (true/false)
    * @param {string} name - Unique name identifier for this callback (prevents duplicates from same class)
    * @returns {void}
@@ -294,7 +294,9 @@ class DataminrIntegration {
     this.pollingInterval = null;
     this.pollIntervalMs = 10000; // Poll Polarity server every 10 seconds
     this.currentUser = null;
-    this.currentAlerts = new Map(); // Map of alertId -> alert object
+    this.currentAlertCache = new Map(); // Map of alertId -> full alert object (# macCacheSize)
+    this.currentAlertIds = new Map(); // Map of alertId -> { id, headline, type, alertTimestamp }
+    this.maxCacheSize = 100;
     this.lastQueryTimestamp = null; // ISO timestamp of last query
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
     this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
@@ -467,12 +469,11 @@ class DataminrIntegration {
       // Add new alerts to current alerts map
       if (newAlerts.length > 0) {
         newAlerts.forEach((newAlert) => {
-          const alertId = newAlert.alertId || 'alert-' + newAlerts.indexOf(newAlert);
-          this.currentAlerts.set(alertId, newAlert);
+          this.processNewAlert(newAlert, true);
         });
 
         // Update the display with new alerts
-        this.updateAlertsDisplay(Array.from(this.currentAlerts.values()));
+        this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()));
       }
     } catch (error) {
       console.error('Error polling alerts:', error);
@@ -545,9 +546,12 @@ class DataminrIntegration {
    * @private
    */
   clearAllAlerts() {
-    // Clear the alerts map
-    if (this.currentAlerts && this.currentAlerts instanceof Map) {
-      this.currentAlerts.clear();
+    // Clear the alerts maps
+    if (this.currentAlertCache) {
+      this.currentAlertCache.clear();
+    }
+    if (this.currentAlertIds) {
+      this.currentAlertIds.clear();
     }
 
     // Reset the last query timestamp
@@ -627,7 +631,20 @@ class DataminrIntegration {
 
       // If detail container doesn't exist, create it dynamically
       if (!detailContainer) {
-        const alert = this.currentAlerts.get(alertId);
+        let alert = this.currentAlertCache.get(alertId);
+        
+        // If not in cache, fetch full alert data
+        if (!alert) {
+          try {
+            alert = await this.getAlertById(alertId);
+            if (alert) {
+              this.processNewAlert(alert);
+            }
+          } catch (e) {
+            console.error('Error fetching alert details:', e);
+          }
+        }
+
         if (!alert) {
           return;
         }
@@ -739,7 +756,7 @@ class DataminrIntegration {
     const remainingButton = qs('.dataminr-tag[data-alert-id="remaining"]');
     const remainingCountElement = qs('#dataminr-remaining-count');
 
-    if (!this.currentAlerts || this.currentAlerts.size === 0) {
+    if (!this.currentAlertIds || this.currentAlertIds.size === 0) {
       if (remainingButton) {
         remainingButton.remove();
       }
@@ -747,7 +764,7 @@ class DataminrIntegration {
     }
 
     const visibleCount = this.getVisibleTagButtonCount();
-    const remainingCount = this.currentAlerts.size - visibleCount;
+    const remainingCount = this.currentAlertIds.size - visibleCount;
 
     if (remainingCount > 0) {
       if (remainingButton && remainingCountElement) {
@@ -769,7 +786,7 @@ class DataminrIntegration {
             </div>
           `;
           newRemainingButton.addEventListener('click', () => {
-            this.updateAlertsDisplay(Array.from(this.currentAlerts.values()), true);
+            this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true);
           });
           alertsList.appendChild(newRemainingButton);
         }
@@ -838,9 +855,12 @@ class DataminrIntegration {
     }
 
     try {
-      // Remove alert from current alerts map
-      if (this.currentAlerts && this.currentAlerts instanceof Map) {
-        this.currentAlerts.delete(alertId);
+      // Remove alert from current alerts maps
+      if (this.currentAlertCache) {
+        this.currentAlertCache.delete(alertId);
+      }
+      if (this.currentAlertIds) {
+        this.currentAlertIds.delete(alertId);
       }
 
       // Remove tag button from UI
@@ -868,7 +888,7 @@ class DataminrIntegration {
       });
 
       // Find alerts that aren't displayed yet
-      const availableAlerts = Array.from(this.currentAlerts.values()).filter((alert) => {
+      const availableAlerts = Array.from(this.currentAlertIds.values()).filter((alert) => {
         const id = alert.alertId || '';
         return id && !displayedAlertIds.has(id);
       });
@@ -891,7 +911,7 @@ class DataminrIntegration {
       this.updateRemainingButton();
 
       // Update alert count
-      const newCount = this.currentAlerts ? this.currentAlerts.size : 0;
+      const newCount = this.currentAlertIds ? this.currentAlertIds.size : 0;
       this.updateAlertCount(newCount);
 
       // If no alerts remain, clear the display
@@ -916,13 +936,13 @@ class DataminrIntegration {
    * @returns {number} returns.total - Total count of all alerts
    */
   calculateAlertCountsByType() {
-    if (!this.currentAlerts || this.currentAlerts.size === 0) {
+    if (!this.currentAlertIds || this.currentAlertIds.size === 0) {
       return { flash: 0, urgent: 0, alert: 0, total: 0 };
     }
 
     const counts = { flash: 0, urgent: 0, alert: 0, total: 0 };
 
-    this.currentAlerts.forEach((alert) => {
+    this.currentAlertIds.forEach((alert) => {
       const alertType = this.getAlertType(alert);
       const normalizedType = alertType.toLowerCase();
 
@@ -943,7 +963,7 @@ class DataminrIntegration {
   /**
    * Update alert counts in UI (by type: Flash, Urgent, Alert)
    * @private
-   * @param {number} [count] - Optional total count (if not provided, calculates from currentAlerts)
+   * @param {number} [count] - Optional total count (if not provided, calculates from currentAlertIds)
    */
   updateAlertCount(count) {
     // Calculate counts by type
@@ -1001,6 +1021,25 @@ class DataminrIntegration {
   }
 
   /**
+   * Get the browser's timezone
+   * @private
+   * @returns {string|undefined} Timezone string (e.g., 'America/New_York') or undefined
+   */
+  getBrowserTimezone() {
+    try {
+      // Use Intl.DateTimeFormat().resolvedOptions() to get the IANA timezone name
+      const resolvedOptions = Intl.DateTimeFormat().resolvedOptions();
+      if (resolvedOptions && resolvedOptions.timeZone) {
+        return resolvedOptions.timeZone;
+      }
+      return undefined;
+    } catch (error) {
+      console.error('Error getting browser timezone:', error);
+      return undefined;
+    }
+  }
+
+  /**
    * Build HTML for alert detail container using backend template
    * @private
    * @param {Object} alert - Alert object
@@ -1010,11 +1049,21 @@ class DataminrIntegration {
     if (!alert) return '';
 
     try {
+      // Get browser timezone
+      const timezone = this.getBrowserTimezone();
+      
       // Request rendered HTML from backend
-      const response = await this.sendIntegrationMessage({
+      const payload = {
         action: 'renderAlertDetail',
         alert: alert
-      });
+      };
+      
+      // Add timezone to payload if available
+      if (timezone) {
+        payload.timezone = timezone;
+      }
+      
+      const response = await this.sendIntegrationMessage(payload);
 
       // Handle response format (could be direct or wrapped in data.attributes.payload)
       let result = response;
@@ -1049,7 +1098,7 @@ class DataminrIntegration {
     }
 
     // Update display with current alerts and filter
-    this.updateAlertsDisplay(this.currentAlerts, false);
+    this.updateAlertsDisplay(this.currentAlertIds, false);
 
     // Update button opacities
     this.updateAlertCount();
@@ -1067,27 +1116,29 @@ class DataminrIntegration {
     if (!bodyElement) return;
 
     // Convert alerts array to Map if needed
+    let alertsMap;
     if (Array.isArray(alerts)) {
-      const alertsMap = new Map();
+      alertsMap = new Map();
       alerts.forEach((alert) => {
         const alertId = alert.alertId || 'alert-' + alerts.indexOf(alert);
         alertsMap.set(alertId, alert);
       });
-      this.currentAlerts = alertsMap;
     } else if (alerts instanceof Map) {
-      this.currentAlerts = alerts;
+      alertsMap = alerts;
+    } else {
+      return;
     }
 
     // Update alert icon count
-    this.updateAlertCount(this.currentAlerts ? this.currentAlerts.size : 0);
+    this.updateAlertCount(this.currentAlertIds ? this.currentAlertIds.size : 0);
 
-    if (!this.currentAlerts || this.currentAlerts.size === 0) {
+    if (!alertsMap || alertsMap.size === 0) {
       bodyElement.innerHTML = '';
       return;
     }
 
     // Convert Map to array for iteration
-    let alertsArray = Array.from(this.currentAlerts.values());
+    let alertsArray = Array.from(alertsMap.values());
 
     // Apply filter if one is active
     if (this.currentFilter) {
@@ -1195,7 +1246,7 @@ class DataminrIntegration {
 
           // Handle remaining button click - show all alerts
           if (alertId === 'remaining') {
-            this.updateAlertsDisplay(Array.from(this.currentAlerts.values()), true);
+            this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true);
             return;
           }
 
@@ -1266,13 +1317,12 @@ class DataminrIntegration {
     // Merge new alerts into currentAlerts Map
     // Update existing alerts or add new ones
     newAlerts.forEach((newAlert) => {
-      const alertId = newAlert.alertId || 'alert-' + newAlerts.indexOf(newAlert);
-      this.currentAlerts.set(alertId, newAlert);
+      this.processNewAlert(newAlert);
     });
 
     if (newAlerts.length > 0) {
       // Update the display with the merged alerts
-      this.updateAlertsDisplay(Array.from(this.currentAlerts.values()));
+      this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()));
     }
   }
 
@@ -1340,14 +1390,14 @@ class DataminrIntegration {
         );
         console.log('Looking up alert from URL parameter:', alertId, alert);
 
-        // Store alert in Map
-        this.currentAlerts.set(alertId, alert);
+        // Store alert in Maps
+        this.processNewAlert(alert);
 
         // Update alert count
-        this.updateAlertCount(this.currentAlerts ? this.currentAlerts.size : 0);
+        this.updateAlertCount(this.currentAlertIds ? this.currentAlertIds.size : 0);
 
         // Update the display with the updated alerts
-        this.updateAlertsDisplay(Array.from(this.currentAlerts.values()));
+        this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()));
 
         // Make the alert detail visible and active
         setTimeout(() => {
@@ -1572,18 +1622,18 @@ class DataminrIntegration {
         e.stopPropagation();
         const linkedAlertId = linkedAlertItem.getAttribute('data-linked-alert-id');
         if (linkedAlertId) {
-          // Get the alert from currentAlerts or fetch it
-          const linkedAlert = this.currentAlerts.get(linkedAlertId);
+          // Get the alert from currentAlertCache or fetch it
+          const linkedAlert = this.currentAlertCache.get(linkedAlertId);
           if (linkedAlert) {
-            // Alert already in map, show it
+            // Alert already in cache, show it
             this.hideAllDetails();
             this.showDetail(linkedAlertId);
           } else {
             // Fetch the alert and then show it
             this.getAlertById(linkedAlertId).then((alert) => {
               if (alert) {
-                // Store alert in map
-                this.currentAlerts.set(linkedAlertId, alert);
+                // Store alert in maps
+                this.processNewAlert(alert);
                 // Show the detail
                 this.hideAllDetails();
                 this.showDetail(linkedAlertId);
@@ -1593,6 +1643,39 @@ class DataminrIntegration {
         }
         return;
       }
+    });
+  }
+
+  /**
+   * Process a new alert: add to cache and IDs map
+   * @private
+   * @param {Object} alert - Alert object
+   */
+  processNewAlert(alert, poll=false) {
+    if (!alert) return;
+
+    const alertId = alert.alertId;
+    if (!alertId) return;
+
+    // Keeping older alerts from poll (top of notifications)
+    if (!poll || this.currentAlertCache.size < this.maxCacheSize) {
+      // Add to full alert cache
+      this.currentAlertCache.set(alertId, alert);
+
+      // Enforce cache limit (remove oldest if > maxCacheSize)
+      if (this.currentAlertCache.size > this.maxCacheSize) {
+        const firstKey = this.currentAlertCache.keys().next().value;
+        this.currentAlertCache.delete(firstKey);
+      }
+    }
+    
+
+    // Add to lightweight IDs map
+    this.currentAlertIds.set(alertId, {
+      alertId: alert.alertId,
+      headline: alert.headline,
+      alertType: alert.alertType,
+      alertTimestamp: alert.alertTimestamp
     });
   }
 }

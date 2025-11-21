@@ -23,9 +23,7 @@ const pollPulseAlerts = async (options) => {
     Logger.debug('Starting Pulse API poll');
 
     const state = getPollingState();
-
-    // Extract cursor from nextPage URL if available, otherwise use stored cursor
-    let paginationCursor = state.lastCursor;
+    let paginationCursor = null;
 
     // Fetch alerts from Pulse API
     const { alerts, nextPage } = await getPulseAlerts(options, paginationCursor);

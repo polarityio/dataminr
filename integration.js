@@ -289,11 +289,17 @@ const onMessage = async (payload, options, cb) => {
 
       case 'renderAlertDetail':
         // Render alert detail HTML using handlebars template
-        const { alert: alertToRender } = payload;
+        const { alert: alertToRender, timezone: payloadTimezone } = payload;
         if (!alertToRender) {
           return cb({ detail: 'Missing alert in payload' });
         }
-        renderAlertDetail(alertToRender, options)
+        
+        // Merge timezone from payload into options if provided
+        const optionsWithTimezone = payloadTimezone
+          ? Object.assign({}, options, { timezone: payloadTimezone })
+          : options;
+        
+        renderAlertDetail(alertToRender, optionsWithTimezone)
           .then((renderedHtml) => {
             Logger.debug({ alertId: alertToRender.alertId }, 'Rendered alert detail template');
             cb(null, { html: renderedHtml });

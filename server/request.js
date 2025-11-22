@@ -54,31 +54,46 @@ const getToken = async (options) => {
   // Set userOptions before making request
   request.userOptions = options;
 
-  const tokenResponse = await request.run({
-    method: 'POST',
-    url: `${options.url}/auth/v1/token`,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      accept: 'application/json'
-    },
-    form: {
-      grant_type: 'api_key',
-      client_id: options.clientId,
-      client_secret: options.clientSecret
-    },
-    json: true
-  });
+  try {
+    const tokenResponse = await request.run({
+      method: 'POST',
+      url: `${options.url}/auth/v1/token`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        accept: 'application/json'
+      },
+      form: {
+        grant_type: 'api_key',
+        client_id: options.clientId,
+        client_secret: options.clientSecret
+      },
+      json: true
+    });
 
-  const token = tokenResponse.body.dmaToken;
-  const expireTime = tokenResponse.body.expire;
+    const token = tokenResponse.body.dmaToken;
+    const expireTime = tokenResponse.body.expire;
 
-  tokenCache.set(
-    tokenCacheKey,
-    token,
-    DateTime.fromMillis(expireTime).diffNow('seconds').seconds
-  );
+    tokenCache.set(
+      tokenCacheKey,
+      token,
+      DateTime.fromMillis(expireTime).diffNow('seconds').seconds
+    );
 
-  return token;
+    return token;
+  } catch (error) {
+    const message = 'Failed to retrieve auth token - invalid clientId / clientSecret: ';
+    if (error.name === 'ApiRequestError' && error.detail) {
+      error.detail = message + error.detail;
+    } else if (error.errors && Array.isArray(error.errors)) {
+      error.errors = error.errors.map((error) => {
+        if (error.message) {
+          error.message = message + error.message;
+        }
+        return error;
+      });
+    }
+    throw error;
+  }
 };
 
 /**

@@ -1,11 +1,11 @@
 const searchPulseAlerts = require('./searchPulseAlerts');
 const { getPulseAlerts, getPulseAlertById } = require('./getPulseAlerts');
+const { getPulseLists } = require('./getPulseLists');
 const pollPulseAlerts = require('./pollPulseAlerts');
 
 const {
   resetPollingState,
   getCachedAlerts,
-  getCachedAlertCount,
   addAlertsToCache,
   clearCachedAlerts
 } = require('./stateManager');
@@ -13,11 +13,11 @@ const {
 module.exports = {
   searchPulseAlerts,
   getPulseAlerts,
+  getPulseLists,
   getPulseAlertById,
   pollPulseAlerts,
   resetPollingState,
   getCachedAlerts,
-  getCachedAlertCount,
   addAlertsToCache,
   clearCachedAlerts
 };

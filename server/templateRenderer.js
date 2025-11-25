@@ -322,7 +322,7 @@ function formatTopicsValue(topics) {
  * @returns {string} Formatted lists matched string
  */
 function formatListsMatchedValue(listsMatched) {
-  return formatNamesValue(listsMatched).replace(/-/g, ' ');
+  return formatNamesValue(listsMatched);
 }
 
 /**

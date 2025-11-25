@@ -58,6 +58,17 @@
       "adminOnly": false
     },
     {
+      "key": "setListsToWatch",
+      "name": "Select Lists to Watch",
+      "description": "The lists to watch for alerts",
+      "type": "select",
+      "default": [],
+      "userCanEdit": true,
+      "adminOnly": false,
+      "multiple": true,
+      "options": []
+    },
+    {
       "key": "url",
       "name": "Dataminr API URL",
       "description": "The base URL of the Dataminr API including the schema (i.e., https://)",

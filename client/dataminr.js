@@ -388,20 +388,9 @@ class DataminrIntegration {
 
       // Load notification HTML from backend template
       try {
-        const response = await this.sendIntegrationMessage({
+        const result = await this.sendIntegrationMessage({
           action: 'renderAlertNotification'
         });
-
-        // Handle response format (could be direct or wrapped in data.attributes.payload)
-        let result = response;
-        if (
-          response &&
-          response.data &&
-          response.data.attributes &&
-          response.data.attributes.payload
-        ) {
-          result = response.data.attributes.payload;
-        }
 
         dataminrContainer.innerHTML = result.html || '';
       } catch (error) {
@@ -534,6 +523,21 @@ class DataminrIntegration {
         action: 'getAlerts'
       };
 
+      // Add listIds if setListsToWatch is configured and not empty
+      if (
+        this.userOptions &&
+        this.userOptions.setListsToWatch &&
+        Array.isArray(this.userOptions.setListsToWatch) &&
+        this.userOptions.setListsToWatch.length > 0
+      ) {
+        const listIds = this.userOptions.setListsToWatch
+          .map((list) => list.value)
+          .filter((id) => id && id !== '0');
+        if (listIds.length > 0) {
+          payload.listIds = listIds.join(',');
+        }
+      }
+
       // If count is provided (from URL parameter), include it (overrides timestamp)
       if (count) {
         payload.count = count;
@@ -545,17 +549,12 @@ class DataminrIntegration {
         payload.sinceTimestamp = new Date().toISOString();
       }
 
-      const response = await this.sendIntegrationMessage(payload);
-
-      // Handle response format (could be direct or wrapped in data.attributes.payload)
-      let result = response;
-      if (
-        response &&
-        response.data &&
-        response.data.attributes &&
-        response.data.attributes.payload
-      ) {
-        result = response.data.attributes.payload;
+      const result = await this.sendIntegrationMessage(payload);
+      let listsMatched = new Map();
+      for (const alert of result.alerts) {
+        for (const list of alert.listsMatched) {
+          listsMatched.set(list.id, list.name);
+        }
       }
 
       // Update last query timestamp from response
@@ -1106,19 +1105,7 @@ class DataminrIntegration {
         payload.timezone = timezone;
       }
 
-      const response = await this.sendIntegrationMessage(payload);
-
-      // Handle response format (could be direct or wrapped in data.attributes.payload)
-      let result = response;
-      if (
-        response &&
-        response.data &&
-        response.data.attributes &&
-        response.data.attributes.payload
-      ) {
-        result = response.data.attributes.payload;
-      }
-
+      const result = await this.sendIntegrationMessage(payload);
       return result.html || '';
     } catch (error) {
       console.error('Error rendering alert detail template:', error);
@@ -1503,6 +1490,38 @@ class DataminrIntegration {
   }
 
   /**
+   * Update the configuration options for the Dataminr available lists
+   * @private
+   */
+  async updateListsToWatch() {
+    try {
+      // Fetch lists from backend
+      const response = await this.sendIntegrationMessage({
+        action: 'getLists'
+      });
+
+      if (!response || !response.lists) {
+        return [{ value: '0', display: 'All Lists' }];
+      }
+
+      // Filter out any lists without value or display (already in correct format from backend)
+      const choices = response.lists.filter((list) => list.value && list.display);
+
+      const integrationOptions = this.userConfig.integrationOptions;
+
+      if (integrationOptions) {
+        const opt = integrationOptions.findBy('key', 'setListsToWatch');
+        if (opt) {
+          Ember.set(opt, 'options', choices);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating lists to watch:', error);
+      return [{ value: '0', display: 'All Lists' }];
+    }
+  }
+
+  /**
    * Initialize the Dataminr integration
    * @private
    */
@@ -1514,6 +1533,11 @@ class DataminrIntegration {
         this.init();
       }
     }, 1000);
+
+    // Update lists to watch asynchronously
+    this.updateListsToWatch().catch((error) => {
+      console.error('Error updating lists to watch:', error);
+    });
 
     const dataminrContainer = byId('dataminr-container');
     if (!dataminrContainer && this.userOptions && this.userOptions.stickyAlerts) {

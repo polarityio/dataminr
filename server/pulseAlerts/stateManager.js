@@ -79,15 +79,37 @@ const filterAlertsByAge = (alerts) => {
 
 /**
  * Get all cached alerts (filtered to remove alerts older than 1 hour)
+ * @param {Array<string>} [listIds] - Optional array of list IDs to filter by. If provided, only returns alerts that match any of the list IDs.
  * @returns {Array<Object>} Array of alert objects (sorted newest first)
  */
-const getCachedAlerts = () => {
+const getCachedAlerts = (listIds = null) => {
   const alerts = alertsCache.get(ALERTS_KEY) || [];
-  const filteredAlerts = filterAlertsByAge(alerts);
+  let filteredAlerts = filterAlertsByAge(alerts);
   
-  // Update cache if any alerts were filtered out
+  // Update cache if age filtering removed any alerts (always update cache after age filtering)
   if (filteredAlerts.length !== alerts.length) {
     alertsCache.set(ALERTS_KEY, filteredAlerts);
+  }
+  
+  // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
+  if (listIds && listIds.length > 0) {
+    // Convert listIds to strings for comparison (normalize all to strings)
+    const listIdsStrings = listIds.map(id => String(id).trim());
+    
+    filteredAlerts = filteredAlerts.filter((alert) => {
+      // Check if alert has listsMatched and if any match the requested listIds
+      if (!alert.listsMatched || !Array.isArray(alert.listsMatched)) {
+        return false;
+      }
+      // Check if any of the alert's matched list IDs are in the requested listIds
+      return alert.listsMatched.some((matchedList) => {
+        if (!matchedList || !matchedList.id) {
+          return false;
+        }
+        const matchedListId = String(matchedList.id).trim();
+        return listIdsStrings.includes(matchedListId);
+      });
+    });
   }
   
   return filteredAlerts;

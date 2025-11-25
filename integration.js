@@ -15,6 +15,7 @@ const { getCachedAlerts, getPollingState } = require('./server/pulseAlerts/state
 const { getPulseAlerts } = require('./server/pulseAlerts/getPulseAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
 const { renderAlertDetail, renderAlertNotification } = require('./server/templateRenderer');
+const { getPulseLists } = require('./server/pulseAlerts/getPulseLists');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
 
@@ -151,17 +152,33 @@ const onMessage = async (payload, options, cb) => {
     switch (action) {
       case 'getAlerts':
         // Extract parameters from payload
-        const { sinceTimestamp, count: countParam } = payload;
+        const { sinceTimestamp, count: countParam, listIds: listIdsParam } = payload;
         
         // Parse count parameter (from URL or payload)
         const alertCount = countParam ? parseInt(countParam, 10) : null;
+        
+        // Parse listIds (comma-separated string or array)
+        let listIds = null;
+        if (listIdsParam) {
+          if (typeof listIdsParam === 'string') {
+            // Parse comma-separated string, filter out empty strings and '0'
+            listIds = listIdsParam.split(',').map(id => id.trim()).filter(id => id && id !== '0');
+          } else if (Array.isArray(listIdsParam)) {
+            // Filter out empty strings and '0'
+            listIds = listIdsParam.filter(id => id && id !== '0');
+          }
+          // If listIds is empty after filtering, set to null (no filtering)
+          if (listIds.length === 0) {
+            listIds = null;
+          }
+        }
         
         // Use provided timestamp or default to current time if not provided
         const queryTimestamp = sinceTimestamp || new Date().toISOString();
         
         try {
-          // Get alerts from global cache (polled alerts)
-          const cachedAlerts = getCachedAlerts();
+          // Get alerts from global cache (filtered by listIds if provided)
+          const cachedAlerts = getCachedAlerts(listIds);
           
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
           const needsApiQuery = alertCount && cachedAlerts.length < alertCount;
@@ -169,19 +186,15 @@ const onMessage = async (payload, options, cb) => {
           let alerts;
           
           if (needsApiQuery) {
-            Logger.debug(
-              {
-                username: username,
-                cachedCount: cachedAlerts.length,
-                requestedCount: alertCount,
-                queryingApi: true
-              },
-              'Cache insufficient, querying API for additional alerts'
-            );
+            // Create options with listIds for API query
+            const queryOptions = {
+              ...options,
+              listIds: listIds
+            };
             
             // Query API for alerts (count overrides timestamp for initial query)
             const { alerts: apiAlerts } = await getPulseAlerts(
-              options,
+              queryOptions,
               null, // No pagination cursor for user queries
               alertCount, // Count parameter (overrides timestamp if provided)
               null // Timestamp ignored when count is provided
@@ -190,7 +203,7 @@ const onMessage = async (payload, options, cb) => {
             // Use API alerts (they're the most recent)
             alerts = apiAlerts;
           } else {
-            // Use cached alerts (already sorted newest first)
+            // Use cached alerts (already sorted newest first and filtered by listIds)
             alerts = cachedAlerts;
             
             // Filter alerts by timestamp if timestamp is provided and count is not
@@ -218,36 +231,11 @@ const onMessage = async (payload, options, cb) => {
               // Limit to requested count if count was provided
               alerts = alerts.slice(0, alertCount);
             }
-            
-            Logger.debug(
-              {
-                username: username,
-                cachedCount: cachedAlerts.length,
-                filteredCount: alerts.length,
-                requestedCount: alertCount,
-                queryingApi: false,
-                usingCache: true
-              },
-              'Using cached alerts from polling'
-            );
           }
           
           // Use the last backend poll timestamp, or current time if polling hasn't started yet
           const pollingState = getPollingState();
           const lastQueryTimestamp = pollingState.lastPollTime || new Date().toISOString();
-          
-          Logger.debug(
-            {
-              username: username,
-              alertCount: alerts.length,
-              queryTimestamp: queryTimestamp,
-              usedCount: !!alertCount,
-              usedTimestamp: !alertCount,
-              lastPollTime: pollingState.lastPollTime,
-              fromCache: !needsApiQuery
-            },
-            'Retrieved alerts for user'
-          );
           
           cb(null, {
             alerts: alerts,
@@ -325,6 +313,20 @@ const onMessage = async (payload, options, cb) => {
           Logger.error({ error, formattedError: err }, 'Failed to render alert notification template');
           cb({ detail: error.message || 'Failed to render alert notification template', err });
         }
+        break;
+
+      case 'getLists':
+        // Get lists from Dataminr API
+        getPulseLists(options)
+          .then((lists) => {
+            Logger.debug({ listCount: lists.length }, 'Retrieved lists from API');
+            cb(null, { lists });
+          })
+          .catch((error) => {
+            const err = parseErrorToReadableJson(error);
+            Logger.error({ error, formattedError: err }, 'Failed to get lists');
+            cb({ detail: error.message || 'Failed to get lists', err });
+          });
         break;
 
       default:

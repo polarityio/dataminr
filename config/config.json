@@ -59,8 +59,8 @@
     },
     {
       "key": "setListsToWatch",
-      "name": "Select Lists to Watch",
-      "description": "The lists to watch for alerts",
+      "name": "Filter Lists to Watch",
+      "description": "Filter the lists to watch for alerts",
       "type": "select",
       "default": [],
       "userCanEdit": true,

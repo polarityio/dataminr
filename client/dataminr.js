@@ -364,6 +364,30 @@ class DataminrIntegration {
   }
 
   /**
+   * Build a class name with polarity-x-client and dm-jewel-theme classes if applicable
+   * @private
+   * @param {string} baseClassName - The base class name
+   * @returns {string} The complete class name with conditional classes added
+   */
+  buildClassName(baseClassName) {
+    let className = baseClassName;
+
+    if (window.polarity) {
+      className += ' polarity-x-client';
+    }
+
+    const hasJewelTheme =
+      document.body &&
+      document.body.classList &&
+      document.body.classList.contains('dm-jewel-theme');
+    if (hasJewelTheme) {
+      className += ' dm-jewel-theme';
+    }
+
+    return className;
+  }
+
+  /**
    * Initialize the Dataminr integration
    * @private
    */
@@ -382,9 +406,7 @@ class DataminrIntegration {
       dataminrIntegrationClass.className = `${this.integrationId}-integration`;
       const dataminrContainer = document.createElement('div');
       dataminrContainer.id = 'dataminr-container';
-      dataminrContainer.className = window.polarity
-        ? 'dataminr-container polarity-x-client'
-        : 'dataminr-container';
+      dataminrContainer.className = this.buildClassName('dataminr-container');
 
       // Load notification HTML from backend template
       try {
@@ -691,9 +713,7 @@ class DataminrIntegration {
 
         // Get or create the details container
         let dataminrDetailsContainer = byId('dataminr-details-container');
-        const dataminrDetailsClass = window.polarity
-          ? 'dataminr-alert-details polarity-x-client'
-          : 'dataminr-alert-details';
+        const dataminrDetailsClass = this.buildClassName('dataminr-alert-details');
 
         if (!dataminrDetailsContainer) {
           const listTopSentinel = byId('list-top-sentinel');
@@ -1235,9 +1255,7 @@ class DataminrIntegration {
 
       // Ensure details container exists (details are built dynamically when shown)
       let dataminrDetailsContainer = byId('dataminr-details-container');
-      const dataminrDetailsClass = window.polarity
-        ? 'dataminr-alert-details polarity-x-client'
-        : 'dataminr-alert-details';
+      const dataminrDetailsClass = this.buildClassName('dataminr-alert-details');
 
       if (!dataminrDetailsContainer) {
         const listTopSentinel = byId('list-top-sentinel');

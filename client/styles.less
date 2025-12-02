@@ -6,7 +6,7 @@
 @color-primary: #7bc942;
 @color-alert-icon: #f7ab3e;
 @color-urgent: #f47d3e;
-@color-flash: #e1211e;
+@color-flash: #e12623;
 @color-alert: #f9b637;
 @color-tracked: #b482e3;
 @color-trending: #7ee7d9;
@@ -17,10 +17,12 @@
 @color-font-inverse: #070e1e;
 
 @color-text-primary: #e0e0e0;
+@color-text-white: #ffffff;
 @color-text-secondary: #b0b0b0;
 @color-text-tertiary: #606470;
 @color-icon-primary: #d9d9d9;
 @color-text-dark: #252525;
+@color-text-black: #000000;
 @color-border: rgba(255, 255, 255, 0.1);
 @color-bg-metadata: rgba(255, 255, 255, 0.04);
 @color-hover-public-link: rgba(51, 177, 255, 0.08);
@@ -191,14 +193,14 @@ img {
 .dataminr-alert-icon {
   border-radius: 3px;
   height: 16px;
-  line-height: 16px;
+  line-height: 18px;
   padding: 0 5px;
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   vertical-align: middle;
-  color: @color-text-dark;
+  color: @color-text-black;
   cursor: pointer;
   transition: opacity 0.2s ease;
   user-select: none;
@@ -227,7 +229,7 @@ img {
   border-radius: 4px;
   color: @color-text-secondary;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 300;
   padding: 0px 5px;
   transition: all 0.2s ease;
@@ -274,7 +276,7 @@ img {
   }
 
   &.dataminr-tag-flash {
-    color: @color-font-primary;
+    color: @color-text-white;
 
     &.active {
       border: 2px solid @color-flash;
@@ -417,7 +419,7 @@ img {
   }
 
   &.dataminr-alert-detail-type-flash {
-    color: @color-font-primary;
+    color: @color-text-white;
     background-color: @color-flash;
   }
 

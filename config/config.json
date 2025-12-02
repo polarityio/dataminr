@@ -1,8 +1,8 @@
 {
   "polarityIntegrationUuid": "9c124af0-17c7-11ef-9994-a9e6b5f6d87d",
-  "name": "Dataminr",
-  "acronym": "DM",
-  "description": "Search Dataminr by all entities to get related Alerts",
+  "name": "Dataminr Pulse",
+  "acronym": "DMP",
+  "description": "Search Dataminr Pulse by all entities to get related Alerts",
   "entityTypes": [
     "domain",
     "IPv4",
@@ -51,7 +51,7 @@
     {
       "key": "stickyAlerts",
       "name": "Pin Dataminr Alerts",
-      "description": "Pin Dataminr Alerts to the top of the Polarity UI",
+      "description": "Pin Dataminr Pulse Alerts to the top of the Polarity UI",
       "default": false,
       "type": "boolean",
       "userCanEdit": true,

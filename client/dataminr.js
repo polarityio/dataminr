@@ -419,7 +419,7 @@ class DataminrIntegration {
         console.error('Error rendering alert notification template:', error);
         // Fallback to empty content if template rendering fails
         dataminrContainer.innerHTML =
-          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">Dataminr Alert</span></div></div><div class="dataminr-body"></div></div>';
+          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">Dataminr Pulse</span></div></div><div class="dataminr-body"></div></div>';
       }
       dataminrIntegrationClass.appendChild(dataminrContainer);
       pinnedPolarityContainer.appendChild(dataminrIntegrationClass);

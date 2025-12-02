@@ -24,7 +24,7 @@ Your Client ID Credential
 Your Client Secret Credential
 - Admin Only: Yes
 
-### Pin Dataminr Alerts
+### Pin Pulse Alerts
 Pin Dataminr Pulse Alerts to the top of the Polarity UI
 - Default: `false`
 - User Editable: Yes

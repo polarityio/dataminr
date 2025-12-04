@@ -27,7 +27,7 @@
 @color-bg-metadata: rgba(255, 255, 255, 0.04);
 @color-hover-public-link: rgba(51, 177, 255, 0.08);
 @color-bg-light: #d3d3d3;
-@color-bg-alert: #222837;
+@color-bg-alert: #2c3240;
 @color-border-reference-term: #606470;
 @color-bg-intel-agents: #19373f;
 @color-gradient-regenai-start: #007061;
@@ -348,23 +348,25 @@ img {
 }
 
 .dataminr-alert-details {
-  padding: 7px 14px 8px 0;
+  padding: 0 14px 8px 0;
 
   @media (max-width: 735px) {
-    padding: 7px 5px 8px 5px;
+    padding: 0 5px 8px 5px;
   }
 }
 
-.dm-jewel-theme .dataminr-alert-details {
-  padding: 7px 10px 8px 5px;
+.dm-jewel-theme.dataminr-alert-details {
+  padding: 0 0 8px 5px;
+  margin-right: -5px;
 
   @media (max-width: 735px) {
-    padding: 7px 5px 8px 5px;
+    padding: 0 5px 8px 5px;
+    margin-right: -10px;
   }
 }
 
 .polarity-x-client.dataminr-alert-details {
-  padding: 3px 5px 5px;
+  padding: 0 5px 5px;
 }
 
 .dm-jewel-theme.polarity-x-client.dataminr-alert-details {
@@ -374,10 +376,15 @@ img {
 .dataminr-alert-detail {
   display: none;
   padding: 10px;
+  margin-top: 7px;
   border-radius: 8px;
   width: 100%;
   background-color: @color-bg-alert;
   color: @color-text-primary;
+}
+
+.polarity-x-client .dataminr-alert-detail {
+  margin-top: 3px;
 }
 
 .dataminr-alert-detail-content {

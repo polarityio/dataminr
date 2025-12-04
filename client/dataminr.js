@@ -405,7 +405,6 @@ class DataminrIntegration {
       const dataminrIntegrationClass = document.createElement('div');
       dataminrIntegrationClass.className = `${this.integrationId}-integration`;
       const dataminrContainer = document.createElement('div');
-      dataminrContainer.id = 'dataminr-container';
       dataminrContainer.className = this.buildClassName('dataminr-container');
 
       // Load notification HTML from backend template
@@ -712,25 +711,7 @@ class DataminrIntegration {
         }
 
         // Get or create the details container
-        let dataminrDetailsContainer = byId('dataminr-details-container');
-        const dataminrDetailsClass = this.buildClassName('dataminr-alert-details');
-
-        if (!dataminrDetailsContainer) {
-          const listTopSentinel = byId('list-top-sentinel');
-          if (!listTopSentinel) {
-            return;
-          }
-          dataminrDetailsContainer = document.createElement('div');
-          dataminrDetailsContainer.id = 'dataminr-details-container';
-          dataminrDetailsContainer.className = `${this.integrationId}-integration`;
-          const detailsContainer = document.createElement('div');
-          detailsContainer.className = dataminrDetailsClass;
-          dataminrDetailsContainer.appendChild(detailsContainer);
-          listTopSentinel.parentNode.insertBefore(
-            dataminrDetailsContainer,
-            listTopSentinel
-          );
-        }
+        const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
 
         let detailsContainer = dataminrDetailsContainer.querySelector(
           '.dataminr-alert-details'
@@ -776,6 +757,31 @@ class DataminrIntegration {
         detailContainer.classList.add('visible');
       }
     }
+  }
+
+  getDataminrDetailsContainerForIntegration() {
+    let dataminrDetailsContainer = byId('dataminr-details-container');
+    const dataminrDetailsClass = this.buildClassName('dataminr-alert-details');
+
+    if (!dataminrDetailsContainer) {
+      const listTopSentinel = byId('list-top-sentinel');
+      if (!listTopSentinel) {
+        return;
+      }
+      dataminrDetailsContainer = document.createElement('div');
+      dataminrDetailsContainer.id = 'dataminr-details-container';
+      dataminrDetailsContainer.className = `${this.integrationId}-integration`;
+      const detailsContainer = document.createElement('div');
+      detailsContainer.className = dataminrDetailsClass;
+      dataminrDetailsContainer.appendChild(detailsContainer);
+      listTopSentinel.parentNode.insertBefore(
+        dataminrDetailsContainer,
+        listTopSentinel
+      );
+    } else if (!dataminrDetailsContainer.classList.contains(`${this.integrationId}-integration`)) {
+      dataminrDetailsContainer.classList.add(`${this.integrationId}-integration`);
+    }
+    return dataminrDetailsContainer;
   }
 
   /**
@@ -1072,7 +1078,7 @@ class DataminrIntegration {
     }
 
     // Add visual indicator if there are alerts
-    const container = byId('dataminr-container');
+    const container = this.getDataminrContainerForIntegration();
     if (container) {
       if (totalCount > 0) {
         container.classList.add('dataminr-has-alerts');
@@ -1080,6 +1086,18 @@ class DataminrIntegration {
         container.classList.remove('dataminr-has-alerts');
       }
     }
+  }
+
+  getDataminrContainerForIntegration() {
+    const containers = qsa('.dataminr-container');
+    if (containers) {
+      for (const container of containers) {
+        if (container.parentNode && container.parentNode.classList.contains(`${this.integrationId}-integration`)) {
+          return container;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1254,34 +1272,8 @@ class DataminrIntegration {
       alertsHtml += '</div>';
 
       // Ensure details container exists (details are built dynamically when shown)
-      let dataminrDetailsContainer = byId('dataminr-details-container');
-      const dataminrDetailsClass = this.buildClassName('dataminr-alert-details');
+      this.getDataminrDetailsContainerForIntegration();
 
-      if (!dataminrDetailsContainer) {
-        const listTopSentinel = byId('list-top-sentinel');
-        if (listTopSentinel) {
-          dataminrDetailsContainer = document.createElement('div');
-          dataminrDetailsContainer.id = 'dataminr-details-container';
-          dataminrDetailsContainer.className = `${this.integrationId}-integration`;
-          const detailsContainer = document.createElement('div');
-          detailsContainer.className = dataminrDetailsClass;
-          dataminrDetailsContainer.appendChild(detailsContainer);
-          listTopSentinel.parentNode.insertBefore(
-            dataminrDetailsContainer,
-            listTopSentinel
-          );
-        }
-      } else {
-        // Ensure details container div exists
-        let detailsContainer = dataminrDetailsContainer.querySelector(
-          '.dataminr-alert-details'
-        );
-        if (!detailsContainer) {
-          detailsContainer = document.createElement('div');
-          detailsContainer.className = dataminrDetailsClass;
-          dataminrDetailsContainer.appendChild(detailsContainer);
-        }
-      }
 
       bodyElement.innerHTML = alertsHtml;
       alertsListContainer = bodyElement.querySelector('.dataminr-alerts-list');
@@ -1557,7 +1549,8 @@ class DataminrIntegration {
       console.error('Error updating lists to watch:', error);
     });
 
-    const dataminrContainer = byId('dataminr-container');
+    const dataminrContainer = this.getDataminrContainerForIntegration();
+    this.getDataminrDetailsContainerForIntegration();
     if (!dataminrContainer && this.userOptions && this.userOptions.stickyAlerts) {
       this.currentUser = window.PolarityUtils.getCurrentUser();
       await this.initPolarityPin();

@@ -883,9 +883,10 @@ async function renderAlertDetail(alert, options) {
  * Render alert notification template (no data needed)
  * @returns {string} Rendered HTML string
  */
-function renderAlertNotification() {
+function renderAlertNotification(name) {
   const template = loadNotificationTemplate();
-  return template({});
+  const displayName = name || 'Dataminr Pulse';
+  return template({ name: displayName });
 }
 
 module.exports = {

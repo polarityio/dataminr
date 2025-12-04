@@ -399,6 +399,10 @@ class DataminrIntegration {
       if (!pinnedPolarityContainer) {
         pinnedPolarityContainer = document.createElement('div');
         pinnedPolarityContainer.id = 'polarity-pin-container';
+        notificationContainer.parentNode.insertBefore(
+          pinnedPolarityContainer,
+          notificationContainer
+        );
       }
 
       // Add dataminr class div before dataminr container
@@ -410,22 +414,30 @@ class DataminrIntegration {
       // Load notification HTML from backend template
       try {
         const result = await this.sendIntegrationMessage({
-          action: 'renderAlertNotification'
+          action: 'renderAlertNotification',
+          name: this.userConfig.name
         });
 
         dataminrContainer.innerHTML = result.html || '';
       } catch (error) {
         console.error('Error rendering alert notification template:', error);
         // Fallback to empty content if template rendering fails
-        dataminrContainer.innerHTML =
-          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">Dataminr Pulse</span></div></div><div class="dataminr-body"></div></div>';
+        '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">' +
+          `${this.userConfig.name}` +
+          '</span></div></div><div class="dataminr-body"></div></div>';
       }
       dataminrIntegrationClass.appendChild(dataminrContainer);
       pinnedPolarityContainer.appendChild(dataminrIntegrationClass);
-      notificationContainer.parentNode.insertBefore(
-        pinnedPolarityContainer,
-        notificationContainer
-      );
+
+      const borderTopClass = window.polarity
+        ? '.polarity-x-client.dataminr-container'
+        : '.dataminr-content';
+      const contentContainer = qsa(borderTopClass, pinnedPolarityContainer);
+      if (contentContainer.length > 1) {
+        for (const content of contentContainer.slice(1)) {
+          content.classList.add('dataminr-no-top-border');
+        }
+      }
 
       // Add click handler to toggle body visibility - entire header is clickable
       const headerElement = dataminrContainer.querySelector('.dataminr-header');
@@ -659,7 +671,7 @@ class DataminrIntegration {
   }
 
   /**
-   * Hide all alert detail containers
+   * Hide all alert detail containers across all integration instances
    * @private
    */
   hideAllDetails() {
@@ -671,7 +683,7 @@ class DataminrIntegration {
   }
 
   /**
-   * Remove active class from all tag buttons
+   * Remove active class from all tag buttons across all integration instances
    * @private
    */
   deactivateAllTagButtons() {
@@ -774,11 +786,10 @@ class DataminrIntegration {
       const detailsContainer = document.createElement('div');
       detailsContainer.className = dataminrDetailsClass;
       dataminrDetailsContainer.appendChild(detailsContainer);
-      listTopSentinel.parentNode.insertBefore(
-        dataminrDetailsContainer,
-        listTopSentinel
-      );
-    } else if (!dataminrDetailsContainer.classList.contains(`${this.integrationId}-integration`)) {
+      listTopSentinel.parentNode.insertBefore(dataminrDetailsContainer, listTopSentinel);
+    } else if (
+      !dataminrDetailsContainer.classList.contains(`${this.integrationId}-integration`)
+    ) {
       dataminrDetailsContainer.classList.add(`${this.integrationId}-integration`);
     }
     return dataminrDetailsContainer;
@@ -811,7 +822,12 @@ class DataminrIntegration {
    * @returns {number} Count of visible tag buttons
    */
   getVisibleTagButtonCount() {
-    return qsa('.dataminr-tag[data-alert-id]:not([data-alert-id="remaining"])').length;
+    const integrationContainer = this.getIntegrationContainer();
+    if (!integrationContainer) return 0;
+    return qsa(
+      '.dataminr-tag[data-alert-id]:not([data-alert-id="remaining"])',
+      integrationContainer
+    ).length;
   }
 
   /**
@@ -819,8 +835,13 @@ class DataminrIntegration {
    * @private
    */
   updateRemainingButton() {
-    const remainingButton = qs('.dataminr-tag[data-alert-id="remaining"]');
-    const remainingCountElement = qs('#dataminr-remaining-count');
+    const integrationContainer = this.getIntegrationContainer();
+    if (!integrationContainer) return;
+    const remainingButton = qs(
+      '.dataminr-tag[data-alert-id="remaining"]',
+      integrationContainer
+    );
+    const remainingCountElement = qs('#dataminr-remaining-count', integrationContainer);
 
     if (!this.currentAlertIds || this.currentAlertIds.size === 0) {
       if (remainingButton) {
@@ -838,7 +859,7 @@ class DataminrIntegration {
         remainingButton.style.display = 'block';
       } else if (!remainingButton) {
         // Create remaining button if it doesn't exist
-        const alertsList = qs('.dataminr-alerts-list');
+        const alertsList = qs('.dataminr-alerts-list', integrationContainer);
         if (alertsList) {
           const newRemainingButton = document.createElement('button');
           newRemainingButton.className = 'dataminr-tag dataminr-tag-alert';
@@ -871,10 +892,12 @@ class DataminrIntegration {
    * @param {string} alertId - Alert ID
    */
   addSingleAlertToUI(alert, alertId) {
-    const bodyElement = qs('.dataminr-body');
+    const integrationContainer = this.getIntegrationContainer();
+    if (!integrationContainer) return;
+    const bodyElement = qs('.dataminr-body', integrationContainer);
     if (!bodyElement) return;
 
-    const alertsListContainer = qs('.dataminr-alerts-list');
+    const alertsListContainer = qs('.dataminr-alerts-list', integrationContainer);
     if (!alertsListContainer) return;
 
     // Build and add tag button
@@ -894,7 +917,10 @@ class DataminrIntegration {
     `;
 
     // Insert before remaining button if it exists, otherwise append
-    const remainingButton = qs('.dataminr-tag[data-alert-id="remaining"]');
+    const remainingButton = qs(
+      '.dataminr-tag[data-alert-id="remaining"]',
+      integrationContainer
+    );
     if (remainingButton) {
       alertsListContainer.insertBefore(tagButton, remainingButton);
     } else {
@@ -930,20 +956,29 @@ class DataminrIntegration {
       }
 
       // Remove tag button from UI
-      const tagButton = qs(`.dataminr-tag[data-alert-id="${alertId}"]`);
+      const integrationContainer = this.getIntegrationContainer();
+      if (!integrationContainer) return;
+      const tagButton = qs(
+        `.dataminr-tag[data-alert-id="${alertId}"]`,
+        integrationContainer
+      );
       if (tagButton) {
         tagButton.remove();
       }
 
       // Remove detail container from UI
-      const detailContainer = qs(`.dataminr-alert-detail[data-alert-id="${alertId}"]`);
+      const detailContainer = qs(
+        `.dataminr-alert-detail[data-alert-id="${alertId}"]`,
+        integrationContainer
+      );
       if (detailContainer) {
         detailContainer.remove();
       }
 
       // Get all alerts that aren't currently displayed
       const visibleTagButtons = qsa(
-        '.dataminr-tag[data-alert-id]:not([data-alert-id="remaining"])'
+        '.dataminr-tag[data-alert-id]:not([data-alert-id="remaining"])',
+        integrationContainer
       );
       const displayedAlertIds = new Set();
       visibleTagButtons.forEach((btn) => {
@@ -984,7 +1019,7 @@ class DataminrIntegration {
 
       // If no alerts remain, clear the display
       if (newCount === 0) {
-        const bodyElement = qs('.dataminr-body');
+        const bodyElement = qs('.dataminr-body', integrationContainer);
         if (bodyElement) {
           bodyElement.innerHTML = '';
         }
@@ -1038,8 +1073,11 @@ class DataminrIntegration {
     const counts = this.calculateAlertCountsByType();
     const totalCount = count !== undefined ? count : counts.total;
 
+    const integrationContainer = this.getIntegrationContainer();
+    if (!integrationContainer) return;
+
     // Update Flash count
-    const flashIcon = document.querySelector('.dataminr-alert-icon-flash');
+    const flashIcon = qs('.dataminr-alert-icon-flash', integrationContainer);
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
       flashIcon.style.display = counts.flash > 0 ? 'inline-block' : 'none';
@@ -1050,7 +1088,7 @@ class DataminrIntegration {
     }
 
     // Update Urgent count
-    const urgentIcon = document.querySelector('.dataminr-alert-icon-urgent');
+    const urgentIcon = qs('.dataminr-alert-icon-urgent', integrationContainer);
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
       urgentIcon.style.display = counts.urgent > 0 ? 'inline-block' : 'none';
@@ -1061,7 +1099,7 @@ class DataminrIntegration {
     }
 
     // Update Alert count
-    const alertIcon = document.querySelector('.dataminr-alert-icon-alert');
+    const alertIcon = qs('.dataminr-alert-icon-alert', integrationContainer);
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
       alertIcon.style.display = counts.alert > 0 ? 'inline-block' : 'none';
@@ -1072,7 +1110,7 @@ class DataminrIntegration {
     }
 
     // Show/hide clear button based on total alert count
-    const clearButton = document.querySelector('.dataminr-clear-all-alerts-btn');
+    const clearButton = qs('.dataminr-clear-all-alerts-btn', integrationContainer);
     if (clearButton) {
       clearButton.style.display = totalCount > 0 ? 'inline-block' : 'none';
     }
@@ -1088,11 +1126,23 @@ class DataminrIntegration {
     }
   }
 
+  /**
+   * Get the integration container root element
+   * @private
+   * @returns {Element|null} The integration container root element or null if not found
+   */
+  getIntegrationContainer() {
+    return qs(`.${this.integrationId}-integration`);
+  }
+
   getDataminrContainerForIntegration() {
     const containers = qsa('.dataminr-container');
     if (containers) {
       for (const container of containers) {
-        if (container.parentNode && container.parentNode.classList.contains(`${this.integrationId}-integration`)) {
+        if (
+          container.parentNode &&
+          container.parentNode.classList.contains(`${this.integrationId}-integration`)
+        ) {
           return container;
         }
       }
@@ -1180,7 +1230,9 @@ class DataminrIntegration {
    * @returns {Promise<void>}
    */
   async updateAlertsDisplay(alerts, showAll = false) {
-    const bodyElement = document.querySelector('.dataminr-body');
+    const integrationContainer = this.getIntegrationContainer();
+    if (!integrationContainer) return;
+    const bodyElement = qs('.dataminr-body', integrationContainer);
     if (!bodyElement) return;
 
     // Convert alerts array to Map if needed
@@ -1217,7 +1269,7 @@ class DataminrIntegration {
     }
 
     // Check if alerts list container exists
-    let alertsListContainer = bodyElement.querySelector('.dataminr-alerts-list');
+    let alertsListContainer = qs('.dataminr-alerts-list', integrationContainer);
 
     // Always rebuild if filtering is active or container doesn't exist or showAll is true
     // This ensures filtered alerts are properly displayed
@@ -1274,12 +1326,11 @@ class DataminrIntegration {
       // Ensure details container exists (details are built dynamically when shown)
       this.getDataminrDetailsContainerForIntegration();
 
-
       bodyElement.innerHTML = alertsHtml;
-      alertsListContainer = bodyElement.querySelector('.dataminr-alerts-list');
+      alertsListContainer = qs('.dataminr-alerts-list', integrationContainer);
 
       // Add click handlers for alert tag buttons to toggle active state and show details
-      const alertTagButtons = bodyElement.querySelectorAll('.dataminr-tag');
+      const alertTagButtons = qsa('.dataminr-tag', integrationContainer);
       alertTagButtons.forEach((button) => {
         button.addEventListener('click', () => {
           const alertId = button.getAttribute('data-alert-id');
@@ -1295,7 +1346,7 @@ class DataminrIntegration {
       });
 
       // Add click handlers for close icons to mark single alert as read
-      const closeIcons = qsa('.dataminr-alert-close-icon');
+      const closeIcons = qsa('.dataminr-alert-close-icon', integrationContainer);
       closeIcons.forEach((closeIcon) => {
         closeIcon.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent triggering tag button click
@@ -1309,7 +1360,7 @@ class DataminrIntegration {
       // Container exists, check if we need to add more alerts
       const visibleTagButtons = qsa(
         '.dataminr-tag[data-alert-id]:not([data-alert-id="remaining"])',
-        bodyElement
+        integrationContainer
       );
       const displayedAlertIds = new Set();
       visibleTagButtons.forEach((btn) => {
@@ -1442,7 +1493,9 @@ class DataminrIntegration {
         // Make the alert detail visible and active
         setTimeout(() => {
           // Find and activate the tag button for this alert
-          const allTagButtons = qsa('.dataminr-tag[data-alert-id]');
+          const integrationContainer = this.getIntegrationContainer();
+          if (!integrationContainer) return;
+          const allTagButtons = qsa('.dataminr-tag[data-alert-id]', integrationContainer);
           let tagButton = null;
           for (let i = 0; i < allTagButtons.length; i++) {
             const btn = allTagButtons[i];
@@ -1779,14 +1832,19 @@ function initDataminr(integration, userConfig, userOptions) {
     window.PolarityUtils = new PolarityUtils();
   }
 
-  if (!window.Dataminr) {
-    window.Dataminr = new DataminrIntegration(integration, userConfig, userOptions);
+  const integrationName = userConfig.name.replace(' ', '');
+  if (!window[integrationName]) {
+    window[integrationName] = new DataminrIntegration(
+      integration,
+      userConfig,
+      userOptions
+    );
     // Set up observer to re-init onSettingsChange
     window.PolarityUtils.onSettingsChange((enterSettings) => {
       if (!enterSettings) {
-        window.Dataminr.init();
+        window[integrationName].init();
       }
-    }, 'DataminrIntegration');
+    }, integrationName);
   }
 }
 

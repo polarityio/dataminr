@@ -305,7 +305,7 @@ const onMessage = async (payload, options, cb) => {
       case 'renderAlertNotification':
         // Render alert notification HTML using handlebars template
         try {
-          const renderedHtml = renderAlertNotification();
+          const renderedHtml = renderAlertNotification(payload.name);
           Logger.debug('Rendered alert notification template');
           cb(null, { html: renderedHtml });
         } catch (error) {

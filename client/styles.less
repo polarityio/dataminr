@@ -96,6 +96,10 @@ img {
 .polarity-x-client.dataminr-container {
   border-top: 1px solid @color-border;
   border-bottom: 1px solid @color-border;
+
+  &.dataminr-no-top-border {
+    border-top: none;
+  }
 }
 
 .dataminr-content {
@@ -103,6 +107,10 @@ img {
   border-bottom: 1px solid @color-border;
   margin: 0 15px;
   padding: 0;
+
+  &.dataminr-no-top-border {
+    border-top: none;
+  }
 
   @media (max-width: 735px) {
     margin: 0;
@@ -138,6 +146,17 @@ img {
 .polarity-x-client .dataminr-alerts-list {
   margin-right: 0;
   padding: 0 4px 2px 4px;
+}
+
+.dm-jewel-theme.polarity-x-client .dataminr-alerts-list {
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    width: 100%;
+    border: none;
+  }
 }
 
 .dataminr-show-body-icon {
@@ -371,6 +390,7 @@ img {
 
 .dm-jewel-theme.polarity-x-client.dataminr-alert-details {
   padding-right: 0;
+  margin-right: -5px;
 }
 
 .dataminr-alert-detail {

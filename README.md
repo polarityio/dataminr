@@ -24,8 +24,8 @@ Your Client ID Credential
 Your Client Secret Credential
 - Admin Only: Yes
 
-### Pin Pulse Alerts
-Pin Dataminr Pulse Alerts to the top of the Polarity UI
+### Pin Dataminr Alerts
+Pin Dataminr Alerts to the top of the Polarity UI
 - Default: `false`
 - User Editable: Yes
 
@@ -36,7 +36,7 @@ Filter the lists to watch for alerts
 - Multiple Selection: Yes
 
 ### Poll Interval
-The interval in seconds for the server to poll for new Pulse Alerts
+The interval in seconds for the server to poll for new Alerts
 - Default: `60` seconds
 - Minimum: `30` seconds
 - Admin Only: Yes

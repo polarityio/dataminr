@@ -1,10 +1,11 @@
 const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
-const { getPulseAlertById } = require('./pulseAlerts/getPulseAlerts');
+const { getAlertById } = require('./alerts/getAlerts');
 
 let templateCache = null;
 let notificationTemplateCache = null;
+const routePrefix = 'pulse';
 
 /**
  * Load and compile the alert detail template
@@ -566,7 +567,8 @@ function processIntelAgents(alert) {
 
 /**
  * Process public post media from alert
- * @param {Object} alert - Alert object
+ * Handles both First Alert API and Pulse API formats (both use arrays of media objects with type and href)
+ * @param {Object} alert - Alert object (from either First Alert API or Pulse API)
  * @returns {Array<Object>|null} Processed media by type or null
  */
 function processMedia(alert) {
@@ -683,7 +685,9 @@ async function processLinkedAlerts(alert, options, timezone) {
       );
     })
     .map(function (linkedAlertItem) {
-      return getPulseAlertById(linkedAlertItem.parentAlertId, options);
+      // Add route prefix to options
+      const optionsWithRoute = { ...options, routePrefix: routePrefix };
+      return getAlertById(linkedAlertItem.parentAlertId, optionsWithRoute);
     });
 
   // Fetch all linked alerts in parallel
@@ -713,8 +717,10 @@ async function processLinkedAlerts(alert, options, timezone) {
 
 /**
  * Process alert reference terms
- * @param {Object} alert - Alert object
- * @returns {Array<Object>|null} Processed reference terms array or null
+ * Handles both API formats: Pulse API uses strings, First Alert API uses objects with text property
+ * Normalizes both to objects with text property for consistent template rendering
+ * @param {Object} alert - Alert object (from either First Alert API or Pulse API)
+ * @returns {Array<Object>|null} Processed reference terms array (objects with text property) or null
  */
 function processReferenceTerms(alert) {
   if (!alert.alertReferenceTerms || !Array.isArray(alert.alertReferenceTerms)) {
@@ -779,7 +785,12 @@ function extractTimezone(options) {
 
 /**
  * Process alert data for template rendering (preprocesses all helper-dependent values)
- * @param {Object} alert - Alert object
+ * Handles both First Alert API and Pulse API formats which have some differences:
+ * - Pulse API includes: alertCompanies, alertSectors, intelAgents, metadata, publicPost.timestamp, publicPost.channels, listsMatched.subType, listsMatched.locationGroups
+ * - First Alert API includes: estimatedEventLocation.MGRS
+ * - alertReferenceTerms: Pulse uses strings, First Alert uses objects with text property (handled by processReferenceTerms)
+ * - Media structure: Both APIs use arrays of objects with type and href (handled by processMedia)
+ * @param {Object} alert - Alert object (from either First Alert API or Pulse API)
  * @param {Object} options - Options object
  * @returns {Promise<Object>} Processed alert data for template
  */
@@ -794,6 +805,22 @@ async function processAlertData(alert, options) {
   const alertTypeName =
     alert.alertType && alert.alertType.name ? alert.alertType.name : 'Alert';
 
+  // Process publicPost with API-specific fields
+  const publicPost = alert.publicPost || null;
+  let publicPostTimestampFormatted = null;
+  let publicPostChannelsFormatted = null;
+  
+  if (publicPost) {
+    // Pulse API includes timestamp in publicPost
+    if (publicPost.timestamp) {
+      publicPostTimestampFormatted = formatTimestampValue(publicPost.timestamp, timezone);
+    }
+    // Pulse API includes channels array in publicPost
+    if (publicPost.channels && Array.isArray(publicPost.channels) && publicPost.channels.length > 0) {
+      publicPostChannelsFormatted = publicPost.channels.join(', ');
+    }
+  }
+
   const processed = {
     alertId: alert.alertId || '',
     alertType: alertTypeName,
@@ -804,10 +831,13 @@ async function processAlertData(alert, options) {
     dataminrAlertUrl: alert.dataminrAlertUrl || null,
     estimatedEventLocation: alert.estimatedEventLocation || null,
     subHeadline: alert.subHeadline || null,
-    publicPost: alert.publicPost || null,
+    publicPost: publicPost,
+    publicPostTimestampFormatted: publicPostTimestampFormatted,
+    publicPostChannelsFormatted: publicPostChannelsFormatted,
     alertReferenceTerms: processReferenceTerms(alert),
     listsMatched: alert.listsMatched || null,
     listsMatchedFormatted: alert.listsMatched ? formatListsMatchedValue(alert.listsMatched) : '',
+    // Pulse API specific fields (will be null for First Alert API)
     alertCompanies: alert.alertCompanies || null,
     alertCompaniesFormatted: alert.alertCompanies
       ? formatCompaniesValue(alert.alertCompanies)
@@ -828,7 +858,7 @@ async function processAlertData(alert, options) {
     processed.liveBriefCopyText = liveBriefData.liveBriefCopyText;
   }
 
-  // Process intel agents
+  // Process intel agents (Pulse API specific)
   const intelAgentsData = processIntelAgents(alert);
   if (intelAgentsData) {
     if (intelAgentsData.intelAgentsGrouped) {
@@ -842,7 +872,7 @@ async function processAlertData(alert, options) {
   
   processed.hasAIContent = !!(processed.liveBrief || processed.intelAgentsGrouped);
 
-  // Process public post media
+  // Process public post media (handles both API formats)
   const mediaData = processMedia(alert);
   if (mediaData) {
     processed.mediaByType = mediaData;
@@ -880,12 +910,13 @@ async function renderAlertDetail(alert, options) {
 }
 
 /**
- * Render alert notification template (no data needed)
+ * Render alert notification template
+ * @param {string} name - Integration name to display
  * @returns {string} Rendered HTML string
  */
 function renderAlertNotification(name) {
   const template = loadNotificationTemplate();
-  const displayName = name || 'Dataminr Pulse';
+  const displayName = name || 'Dataminr Alerts';
   return template({ name: displayName });
 }
 

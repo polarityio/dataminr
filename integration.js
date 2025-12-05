@@ -6,25 +6,29 @@ const {
 const { validateOptions } = require('./server/userOptions');
 const { removePrivateIps } = require('./server/dataTransformations');
 const {
-  pollPulseAlerts,
+  pollAlerts,
   resetPollingState,
-  searchPulseAlerts,
-  getPulseAlertById
-} = require('./server/pulseAlerts');
-const { getCachedAlerts, getPollingState } = require('./server/pulseAlerts/stateManager');
-const { getPulseAlerts } = require('./server/pulseAlerts/getPulseAlerts');
+  searchAlerts,
+  getAlertById
+} = require('./server/alerts');
+const { getCachedAlerts, getPollingState } = require('./server/alerts/stateManager');
+const { getAlerts } = require('./server/alerts/getAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
-const { renderAlertDetail, renderAlertNotification } = require('./server/templateRenderer');
-const { getPulseLists } = require('./server/pulseAlerts/getPulseLists');
+const {
+  renderAlertDetail,
+  renderAlertNotification
+} = require('./server/templateRenderer');
+const { getLists } = require('./server/alerts/getLists');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
 
 let pollingInterval = null;
 let Logger = null;
 let pollingInitialized = false;
+const routePrefix = 'pulse';
 
 /**
- * Initialize polling for Pulse alerts
+ * Initialize polling for alerts
  * @param {Object} options - Configuration options containing clientId, clientSecret, and pollInterval
  * @returns {Promise<void>} Resolves when polling is initialized
  */
@@ -43,9 +47,12 @@ const initializePolling = async (options) => {
   // Reset polling state on first initialization
   resetPollingState();
 
+  // Add route prefix to options
+  const optionsWithRoute = { ...options, routePrefix: routePrefix };
+
   // Start polling immediately
   try {
-    await pollPulseAlerts(options);
+    await pollAlerts(optionsWithRoute);
   } catch (error) {
     Logger.error({ error }, 'Initial poll failed, but continuing with interval polling');
   }
@@ -55,7 +62,7 @@ const initializePolling = async (options) => {
 
   pollingInterval = setInterval(async () => {
     try {
-      await pollPulseAlerts(options);
+      await pollAlerts(optionsWithRoute);
     } catch (error) {
       Logger.error({ error }, 'Error in polling interval');
     }
@@ -79,7 +86,9 @@ const doLookup = async (entities, options, cb) => {
 
     const searchableEntities = removePrivateIps(entities);
 
-    const alerts = await searchPulseAlerts(searchableEntities, options);
+    // Add route prefix to options
+    const optionsWithRoute = { ...options, routePrefix: routePrefix };
+    const alerts = await searchAlerts(searchableEntities, optionsWithRoute);
 
     Logger.trace({ alerts, searchableEntities });
 
@@ -153,59 +162,63 @@ const onMessage = async (payload, options, cb) => {
       case 'getAlerts':
         // Extract parameters from payload
         const { sinceTimestamp, count: countParam, listIds: listIdsParam } = payload;
-        
+
         // Parse count parameter (from URL or payload)
         const alertCount = countParam ? parseInt(countParam, 10) : null;
-        
+
         // Parse listIds (comma-separated string or array)
         let listIds = null;
         if (listIdsParam) {
           if (typeof listIdsParam === 'string') {
             // Parse comma-separated string, filter out empty strings and '0'
-            listIds = listIdsParam.split(',').map(id => id.trim()).filter(id => id && id !== '0');
+            listIds = listIdsParam
+              .split(',')
+              .map((id) => id.trim())
+              .filter((id) => id && id !== '0');
           } else if (Array.isArray(listIdsParam)) {
             // Filter out empty strings and '0'
-            listIds = listIdsParam.filter(id => id && id !== '0');
+            listIds = listIdsParam.filter((id) => id && id !== '0');
           }
           // If listIds is empty after filtering, set to null (no filtering)
           if (listIds.length === 0) {
             listIds = null;
           }
         }
-        
+
         // Use provided timestamp or default to current time if not provided
         const queryTimestamp = sinceTimestamp || new Date().toISOString();
-        
+
         try {
           // Get alerts from global cache (filtered by listIds if provided)
           const cachedAlerts = getCachedAlerts(listIds);
-          
+
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
           const needsApiQuery = alertCount && cachedAlerts.length < alertCount;
-          
+
           let alerts;
-          
+
           if (needsApiQuery) {
-            // Create options with listIds for API query
+            // Create options with listIds and route prefix for API query
             const queryOptions = {
               ...options,
-              listIds: listIds
+              listIds: listIds,
+              routePrefix: routePrefix
             };
-            
+
             // Query API for alerts (count overrides timestamp for initial query)
-            const { alerts: apiAlerts } = await getPulseAlerts(
+            const { alerts: apiAlerts } = await getAlerts(
               queryOptions,
               null, // No pagination cursor for user queries
               alertCount, // Count parameter (overrides timestamp if provided)
               null // Timestamp ignored when count is provided
             );
-            
+
             // Use API alerts (they're the most recent)
             alerts = apiAlerts;
           } else {
             // Use cached alerts (already sorted newest first and filtered by listIds)
             alerts = cachedAlerts;
-            
+
             // Filter alerts by timestamp if timestamp is provided and count is not
             // Since alerts are sorted newest first, we can use early termination
             if (queryTimestamp && !alertCount) {
@@ -232,11 +245,12 @@ const onMessage = async (payload, options, cb) => {
               alerts = alerts.slice(0, alertCount);
             }
           }
-          
+
           // Use the last backend poll timestamp, or current time if polling hasn't started yet
           const pollingState = getPollingState();
-          const lastQueryTimestamp = pollingState.lastPollTime || new Date().toISOString();
-          
+          const lastQueryTimestamp =
+            pollingState.lastPollTime || new Date().toISOString();
+
           cb(null, {
             alerts: alerts,
             count: alerts.length,
@@ -258,10 +272,15 @@ const onMessage = async (payload, options, cb) => {
         if (!requestedAlertId) {
           return cb({ detail: 'Missing alertId in payload' });
         }
-        getPulseAlertById(requestedAlertId, options)
+        // Add route prefix to options
+        const optionsWithRouteForAlert = { ...options, routePrefix: routePrefix };
+        getAlertById(requestedAlertId, optionsWithRouteForAlert)
           .then((alert) => {
             if (alert) {
-              Logger.debug({ alertId: requestedAlertId }, 'Retrieved alert by ID from API');
+              Logger.debug(
+                { alertId: requestedAlertId },
+                'Retrieved alert by ID from API'
+              );
               cb(null, { alert });
             } else {
               Logger.warn({ alertId: requestedAlertId }, 'Alert not found in API');
@@ -270,7 +289,10 @@ const onMessage = async (payload, options, cb) => {
           })
           .catch((error) => {
             const err = parseErrorToReadableJson(error);
-            Logger.error({ error, formattedError: err, alertId: requestedAlertId }, 'Failed to get alert by ID');
+            Logger.error(
+              { error, formattedError: err, alertId: requestedAlertId },
+              'Failed to get alert by ID'
+            );
             cb({ detail: error.message || 'Failed to get alert by ID', err });
           });
         break;
@@ -281,15 +303,18 @@ const onMessage = async (payload, options, cb) => {
         if (!alertToRender) {
           return cb({ detail: 'Missing alert in payload' });
         }
-        
+
         // Merge timezone from payload into options if provided
         const optionsWithTimezone = payloadTimezone
           ? Object.assign({}, options, { timezone: payloadTimezone })
           : options;
-        
+
         renderAlertDetail(alertToRender, optionsWithTimezone)
           .then((renderedHtml) => {
-            Logger.debug({ alertId: alertToRender.alertId }, 'Rendered alert detail template');
+            Logger.debug(
+              { alertId: alertToRender.alertId },
+              'Rendered alert detail template'
+            );
             cb(null, { html: renderedHtml });
           })
           .catch((error) => {
@@ -298,7 +323,10 @@ const onMessage = async (payload, options, cb) => {
               { error, formattedError: err, alertId: alertToRender.alertId },
               'Failed to render alert detail template'
             );
-            cb({ detail: error.message || 'Failed to render alert detail template', err });
+            cb({
+              detail: error.message || 'Failed to render alert detail template',
+              err
+            });
           });
         break;
 
@@ -310,14 +338,22 @@ const onMessage = async (payload, options, cb) => {
           cb(null, { html: renderedHtml });
         } catch (error) {
           const err = parseErrorToReadableJson(error);
-          Logger.error({ error, formattedError: err }, 'Failed to render alert notification template');
-          cb({ detail: error.message || 'Failed to render alert notification template', err });
+          Logger.error(
+            { error, formattedError: err },
+            'Failed to render alert notification template'
+          );
+          cb({
+            detail: error.message || 'Failed to render alert notification template',
+            err
+          });
         }
         break;
 
       case 'getLists':
         // Get lists from Dataminr API
-        getPulseLists(options)
+        // Add route prefix to options
+        const optionsWithRouteForLists = { ...options, routePrefix: routePrefix };
+        getLists(optionsWithRouteForLists)
           .then((lists) => {
             Logger.debug({ listCount: lists.length }, 'Retrieved lists from API');
             cb(null, { lists });

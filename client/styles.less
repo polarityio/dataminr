@@ -34,7 +34,10 @@
 @color-border-intel-agents: #069381;
 @color-link-icon: #33b2ff;
 
-/* Block Notifications Styles */
+/* ============================================
+   Global Styles
+   ============================================ */
+
 * {
   overflow-wrap: break-word !important;
   word-break: break-word !important;
@@ -48,13 +51,13 @@ pre {
   margin-top: 5px;
 }
 
+img {
+  width: 100%;
+}
+
 .external-link-icon {
   font-size: 8px;
   margin-bottom: 1px;
-}
-
-img {
-  width: 100%;
 }
 
 .expandable-title {
@@ -67,6 +70,7 @@ img {
   .text {
     color: @color-primary !important;
     border-bottom: 1px solid @color-primary;
+
     .desc {
       color: black !important;
       font-weight: 400 !important;
@@ -87,12 +91,15 @@ img {
   }
 }
 
+/* ============================================
+   Container Styles
+   ============================================ */
+
 .dataminr-container {
   margin-bottom: 1px;
   margin-top: 1px;
 }
 
-/* Pinned Alert Styles */
 .polarity-x-client.dataminr-container {
   border-top: 1px solid @color-border;
   border-bottom: 1px solid @color-border;
@@ -122,6 +129,10 @@ img {
   margin: 0;
 }
 
+/* ============================================
+   Alerts List Styles
+   ============================================ */
+
 .dataminr-alerts-list {
   display: flex;
   flex-wrap: wrap;
@@ -134,12 +145,18 @@ img {
   margin-right: -15px;
 }
 
-.dm-jewel-theme .dataminr-alerts-list {
-  margin-right: -25px;
+.dm-jewel-theme {
+  .dataminr-alerts-list {
+    margin-right: -25px;
 
-  @media (max-width: 735px) {
-    margin-right: -10px;
-    padding: 0 4px 4px 4px;
+    @media (max-width: 735px) {
+      margin-right: -10px;
+      padding: 0 4px 4px 4px;
+    }
+  }
+
+  &.overlay-scrollbars .dataminr-alerts-list {
+    padding-right: 20px;
   }
 }
 
@@ -158,6 +175,10 @@ img {
     border: none;
   }
 }
+
+/* ============================================
+   Header Styles
+   ============================================ */
 
 .dataminr-show-body-icon {
   color: @color-icon-primary;
@@ -203,6 +224,10 @@ img {
   padding-right: 3px;
 }
 
+/* ============================================
+   Alert Icons Styles
+   ============================================ */
+
 .dataminr-alert-icons-container {
   display: flex;
   align-items: center;
@@ -228,18 +253,18 @@ img {
   &:hover {
     opacity: 0.8 !important;
   }
-}
 
-.dataminr-alert-icon-flash {
-  background-color: @color-flash;
-}
+  &.dataminr-alert-icon-flash {
+    background-color: @color-flash;
+  }
 
-.dataminr-alert-icon-urgent {
-  background-color: @color-urgent;
-}
+  &.dataminr-alert-icon-urgent {
+    background-color: @color-urgent;
+  }
 
-.dataminr-alert-icon-alert {
-  background-color: @color-alert;
+  &.dataminr-alert-icon-alert {
+    background-color: @color-alert;
+  }
 }
 
 .dataminr-clear-all-alerts-btn {
@@ -271,6 +296,10 @@ img {
   }
 }
 
+/* ============================================
+   Tag Styles
+   ============================================ */
+
 .dataminr-tag {
   border-radius: 7px;
   padding: 3px;
@@ -292,6 +321,14 @@ img {
     &:focus-visible {
       outline: @color-urgent;
     }
+
+    .dataminr-alert-tag-text {
+      background-color: @color-urgent;
+
+      &:hover {
+        background-color: darken(@color-urgent, 10%);
+      }
+    }
   }
 
   &.dataminr-tag-flash {
@@ -304,6 +341,14 @@ img {
     &:focus,
     &:focus-visible {
       outline: @color-flash;
+    }
+
+    .dataminr-alert-tag-text {
+      background-color: @color-flash;
+
+      &:hover {
+        background-color: darken(@color-flash, 10%);
+      }
     }
   }
 
@@ -318,11 +363,15 @@ img {
     &:focus-visible {
       outline: @color-alert;
     }
-  }
-}
 
-.dataminr-body {
-  color: @color-text-primary;
+    .dataminr-alert-tag-text {
+      background-color: @color-alert;
+
+      &:hover {
+        background-color: darken(@color-alert, 10%);
+      }
+    }
+  }
 }
 
 .dataminr-alert-tag-text {
@@ -342,29 +391,13 @@ img {
   font-weight: 600;
 }
 
-.dataminr-tag-urgent .dataminr-alert-tag-text {
-  background-color: @color-urgent;
-
-  &:hover {
-    background-color: darken(@color-urgent, 10%);
-  }
+.dataminr-body {
+  color: @color-text-primary;
 }
 
-.dataminr-tag-flash .dataminr-alert-tag-text {
-  background-color: @color-flash;
-
-  &:hover {
-    background-color: darken(@color-flash, 10%);
-  }
-}
-
-.dataminr-tag-alert .dataminr-alert-tag-text {
-  background-color: @color-alert;
-
-  &:hover {
-    background-color: darken(@color-alert, 10%);
-  }
-}
+/* ============================================
+   Alert Details Styles
+   ============================================ */
 
 .dataminr-alert-details {
   padding: 0 14px 8px 0;
@@ -407,11 +440,29 @@ img {
   margin-top: 3px;
 }
 
+.dataminr-alert-search-details .dataminr-alert-detail {
+  margin: 10px 0;
+  display: block;
+}
+
 .dataminr-alert-detail-content {
   padding: 5px 10px;
 
   p {
     margin-bottom: 5px;
+  }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: @color-text-primary;
+    padding-top: 10px;
+  }
+
+  hr {
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    margin: 15px 0 10px;
+    background: transparent;
   }
 }
 
@@ -492,37 +543,16 @@ img {
   padding-top: 8px;
 }
 
-.dataminr-alert-detail-url-icon svg {
-  color: @color-link-icon;
+.dataminr-alert-detail-url-icon {
+  svg {
+    color: @color-link-icon;
+  }
 }
 
 .dataminr-alert-detail-location-name {
   font-size: 14px;
   line-height: 22px;
   vertical-align: middle;
-}
-
-.dataminr-public-post-media-type-header {
-  font-size: 14px;
-  font-weight: 400;
-  color: @color-text-primary;
-}
-
-.dataminr-alert-detail-headline {
-  font-size: 20px;
-}
-
-.dataminr-alert-detail-content h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: @color-text-primary;
-  padding-top: 10px;
-}
-
-.dataminr-alert-detail-content hr {
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-  margin: 15px 0 10px;
-  background: transparent;
 }
 
 .dataminr-alert-reference-terms-container {
@@ -545,6 +575,43 @@ img {
     background-color: rgba(255, 255, 255, 0.1);
   }
 }
+
+.dataminr-alert-metadata-content {
+  background-color: @color-bg-metadata;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.dataminr-alert-companies,
+.dataminr-alert-topics,
+.dataminr-alert-sectors,
+.dataminr-alert-lists-matched {
+  font-size: 12px;
+}
+
+.dataminr-alert-companies-label,
+.dataminr-alert-topics-label,
+.dataminr-alert-sectors-label,
+.dataminr-alert-lists-matched-label {
+  font-weight: 600;
+  color: @color-text-secondary;
+}
+
+.dataminr-headline-card-section {
+  padding-bottom: 5px;
+}
+
+.dataminr-headline-card-section-header {
+  margin: 10px 0;
+}
+
+.dataminr-message-card-bullets-list {
+  margin-bottom: 0px;
+}
+
+/* ============================================
+   Intel Agents Styles
+   ============================================ */
 
 .dataminr-alert-intel-agents {
   background-color: @color-bg-intel-agents;
@@ -573,6 +640,12 @@ img {
   align-items: center;
 }
 
+.dataminr-alert-intel-agents-header-icon {
+  svg {
+    margin-top: -8px;
+  }
+}
+
 .dataminr-alert-intel-agents-actions {
   display: flex;
   align-items: center;
@@ -594,24 +667,25 @@ img {
   color: @color-text-secondary;
   transition: color 0.2s ease, opacity 0.2s ease;
   opacity: 0.7;
-}
 
-.dataminr-alert-intel-agents-copy-btn:hover {
-  color: @color-text-primary;
-  opacity: 1;
-}
+  &:hover {
+    color: @color-text-primary;
+    opacity: 1;
+  }
 
-.dataminr-alert-intel-agents-copy-btn:focus {
-  outline: none;
-  opacity: 1;
-}
+  &:focus {
+    outline: none;
+    opacity: 1;
+  }
 
-.dataminr-alert-intel-agents-copy-btn svg {
-  display: block;
+  svg {
+    display: block;
+  }
 }
 
 .dataminr-alert-intel-agents-type-group {
   margin-top: 15px;
+  margin-bottom: 5px;
 
   &:first-child {
     margin-top: 0;
@@ -645,23 +719,46 @@ img {
   }
 }
 
-.dataminr-alert-intel-agents-header-icon svg {
-  margin-top: -8px;
+.dataminr-alert-intel-agents-discovered-entities {
+  margin-top: 10px;
 }
 
-.dataminr-headline-card-section {
-  padding-bottom: 5px;
+.dataminr-alert-intel-agents-discovered-entities-header {
+  margin: 0 0 8px 0;
+  color: @color-text-primary;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.dataminr-headline-card-section-header {
-  margin: 10px 0;
+.dataminr-alert-intel-agents-discovered-entities-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.dataminr-message-card-bullets-list {
-  margin-bottom: 0px;
+.dataminr-alert-intel-agents-discovered-entity-item {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px 4px 8px;
+  border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: @color-text-primary !important;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 
-/* Live Brief Styles */
+/* ============================================
+   Live Brief Styles
+   ============================================ */
+
 .dataminr-alert-live-brief {
   margin-top: 15px;
   margin-bottom: 10px;
@@ -701,10 +798,10 @@ img {
   color: @color-font-inverse;
   padding: 0.25rem;
   border-radius: 0.25rem;
-}
 
-.dataminr-alert-live-brief-regenai-icon-container svg {
-  display: block;
+  svg {
+    display: block;
+  }
 }
 
 .dataminr-alert-live-brief-regenai-label {
@@ -738,10 +835,10 @@ img {
   align-items: center;
   justify-content: center;
   color: @color-text-primary;
-}
 
-.dataminr-alert-live-brief-icon-wrapper svg {
-  display: block;
+  svg {
+    display: block;
+  }
 }
 
 .dataminr-alert-live-brief-title {
@@ -762,10 +859,10 @@ img {
   line-height: 20px;
   color: @color-text-primary;
   margin-top: 4px;
-}
 
-.dataminr-alert-live-brief-summary span {
-  display: block;
+  span {
+    display: block;
+  }
 }
 
 .dataminr-alert-live-brief-actions {
@@ -789,75 +886,30 @@ img {
   color: @color-text-secondary;
   transition: color 0.2s ease, opacity 0.2s ease;
   opacity: 0.7;
-}
-
-.dataminr-alert-live-brief-copy-btn:hover {
-  color: @color-text-primary;
-  opacity: 1;
-}
-
-.dataminr-alert-live-brief-copy-btn:focus {
-  outline: none;
-  opacity: 1;
-}
-
-.dataminr-alert-live-brief-copy-btn svg {
-  display: block;
-}
-
-.dataminr-alert-intel-agents-type-group {
-  margin-bottom: 5px;
-}
-
-.dataminr-alert-intel-agents-discovered-entities {
-  margin-top: 10px;
-}
-
-.dataminr-alert-intel-agents-discovered-entities-header {
-  margin: 0 0 8px 0;
-  color: @color-text-primary;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.dataminr-alert-intel-agents-discovered-entities-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.dataminr-alert-intel-agents-discovered-entity-item {
-  background: rgba(255, 255, 255, 0.08);
-  padding: 4px 10px 4px 8px;
-  border-radius: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  color: @color-text-primary !important;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    color: @color-text-primary;
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
+    opacity: 1;
+  }
+
+  svg {
+    display: block;
   }
 }
 
-.dataminr-alert-intel-agents-discovered-entity-item svg {
-  flex-shrink: 0;
-}
+/* ============================================
+   Public Post Styles
+   ============================================ */
 
-.dataminr-alert-companies,
-.dataminr-alert-topics,
-.dataminr-alert-sectors,
-.dataminr-alert-lists-matched {
-  font-size: 12px;
-}
-
-.dataminr-alert-companies-label,
-.dataminr-alert-topics-label,
-.dataminr-alert-sectors-label,
-.dataminr-alert-lists-matched-label {
-  font-weight: 600;
-  color: @color-text-secondary;
+.dataminr-public-post-media-type-header {
+  font-size: 14px;
+  font-weight: 400;
+  color: @color-text-primary;
 }
 
 .dataminr-public-post-text-header {
@@ -880,12 +932,6 @@ img {
   &:hover {
     background-color: @color-hover-public-link;
   }
-}
-
-.dataminr-alert-metadata-content {
-  background-color: @color-bg-metadata;
-  padding: 10px;
-  border-radius: 4px;
 }
 
 .dataminr-public-post-media-container {
@@ -932,12 +978,12 @@ img {
   width: 100%;
   height: 100%;
   z-index: 10000;
-}
 
-.dataminr-image-modal.dataminr-image-modal-active {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  &.dataminr-image-modal-active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .dataminr-image-modal-overlay {
@@ -1111,9 +1157,4 @@ img {
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.5;
-}
-
-.dataminr-alert-search-details .dataminr-alert-detail {
-  margin: 10px 0;
-  display: block;
 }

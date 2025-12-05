@@ -9,19 +9,21 @@ const { requestsInParallel } = require('../request');
 const { MAX_PAGE_SIZE } = require('../constants');
 
 /**
- * Search for Pulse alerts matching the given entities
+ * Search for alerts matching the given entities
  * @param {Array<Object>} entities - Array of entity objects to search for
  * @param {Object} options - Configuration options
+ * @param {string} options.routePrefix - Route prefix for the API (e.g., 'firstalert' or 'pulse')
  * @returns {Promise<Array<Object>>} Resolves with array of alert results
  */
-const searchPulseAlerts = async (entities, options) => {
+const searchAlerts = async (entities, options) => {
   const Logger = getLogger();
 
   try {
+    const route = `${options.routePrefix}/v1/alerts`;
     const alertsRequests = map(
       (entity) => ({
         resultId: entity.value,
-        route: `pulse/v1/alerts`,
+        route,
         qs: {
           query: entity.value,
           pageSize: MAX_PAGE_SIZE
@@ -41,10 +43,10 @@ const searchPulseAlerts = async (entities, options) => {
         formattedError: err,
         error
       },
-      'Searching Pulse Alerts Failed'
+      'Searching Dataminr Alerts Failed'
     );
     throw error;
   }
 };
 
-module.exports = searchPulseAlerts;
+module.exports = searchAlerts;

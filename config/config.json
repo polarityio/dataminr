@@ -50,8 +50,8 @@
   "options": [
     {
       "key": "stickyAlerts",
-      "name": "Pin Pulse Alerts",
-      "description": "Pin Dataminr Pulse Alerts to the top of the Polarity UI",
+      "name": "Pin Dataminr Alerts",
+      "description": "Pin Dataminr Alerts to the top of the Polarity UI",
       "default": false,
       "type": "boolean",
       "userCanEdit": true,
@@ -98,7 +98,7 @@
     {
       "key": "pollInterval",
       "name": "Poll Interval",
-      "description": "The interval in seconds for the server to poll for new Pulse Alerts",
+      "description": "The interval in seconds for the server to poll for new Alerts",
       "default": 60,
       "type": "number",
       "userCanEdit": false,

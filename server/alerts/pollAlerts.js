@@ -3,12 +3,12 @@ const {
   errors: { parseErrorToReadableJson }
 } = require('polarity-integration-utils');
 
-const { getPulseAlerts } = require('./getPulseAlerts');
+const { getAlerts } = require('./getAlerts');
 const { getPollingState, updatePollingState } = require('./stateManager');
 const { processAlerts } = require('./alertProcessor');
 
 /**
- * Poll the Pulse API for new alerts and process them
+ * Poll the API for new alerts and process them
  * @param {Object} options - Configuration options
  * @returns {Promise<Object>} Resolves with polling result object
  * @returns {boolean} returns.success - Whether polling was successful
@@ -16,17 +16,17 @@ const { processAlerts } = require('./alertProcessor');
  * @returns {boolean} returns.hasMore - Whether there are more alerts to fetch
  * @returns {string} [returns.error] - Error message if polling failed
  */
-const pollPulseAlerts = async (options) => {
+const pollAlerts = async (options) => {
   const Logger = getLogger();
 
   try {
-    Logger.debug('Starting Pulse API poll');
+    Logger.debug('Starting Dataminr API poll');
 
     const state = getPollingState();
     let paginationCursor = null;
 
-    // Fetch alerts from Pulse API
-    const { alerts, nextPage } = await getPulseAlerts(options, paginationCursor);
+    // Fetch alerts from the Dataminr API
+    const { alerts, nextPage } = await getAlerts(options, paginationCursor);
 
     // Process the alerts
     if (alerts.length > 0) {
@@ -75,7 +75,7 @@ const pollPulseAlerts = async (options) => {
         formattedError: err,
         error
       },
-      'Polling Pulse API Failed'
+      'Polling Dataminr API Failed'
     );
 
     // Don't throw - allow polling to continue on next interval
@@ -86,4 +86,4 @@ const pollPulseAlerts = async (options) => {
   }
 };
 
-module.exports = pollPulseAlerts;
+module.exports = pollAlerts;

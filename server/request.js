@@ -99,7 +99,7 @@ const getToken = async (options) => {
 /**
  * Make an authenticated request to the Dataminr API
  * @param {Object} params - Request parameters
- * @param {string} params.route - API route (e.g., 'pulse/v1/alerts')
+ * @param {string} params.route - API route (e.g., '.../v1/alerts')
  * @param {Object} params.options - Configuration options
  * @param {Object} params.requestOptions - Additional request options (method, qs, headers, etc.)
  * @returns {Promise<Object>} Resolves with the response object

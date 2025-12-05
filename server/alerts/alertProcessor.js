@@ -5,7 +5,7 @@ const {
 const { addAlertsToCache } = require('./stateManager');
 
 /**
- * Process alerts from the Pulse API and store them in the global cache
+ * Process alerts from the API and store them in the global cache
  * @param {Array<Object>} alerts - Array of alert objects to process
  * @param {Object} options - Configuration options
  * @returns {Promise<Object>} Resolves with processing result

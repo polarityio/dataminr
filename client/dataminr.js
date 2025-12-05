@@ -118,6 +118,9 @@ class PolarityUtils {
   constructor() {
     this.integrationMessenger = null;
     this._settingsChangeCallbacks = new Map(); // Map name -> callback
+    this._scrollbarModeCallbacks = new Map(); // Map name -> callback
+    this._scrollbarModeObserverInitialized = false;
+    this._scrollbarModeLast = null; // Last scrollbar mode state
     this._settingsChangeObserverInitialized = false;
     this._enterSettings = false;
   }
@@ -239,6 +242,59 @@ class PolarityUtils {
     } else {
       console.error(`Error sending integration message for action ${action}:`, error);
     }
+  }
+
+  /**
+   * Track scrollbar mode changes
+   * @param {Function} callback - Callback function to trigger on changes
+   * @param {string} name - Unique name identifier for this callback (prevents duplicates from same class)
+   * @returns {void}
+   */
+  trackScrollbarMode(callback, name) {
+    if (typeof callback !== 'function' || !name) {
+      console.error(
+        'Invalid callback or name provided to PolarityUtils.trackScrollbarMode'
+      );
+      return;
+    }
+
+    // Store the callback by name (will override if name already exists)
+    this._scrollbarModeCallbacks.set(name, callback);
+
+    if (this._scrollbarModeObserverInitialized) {
+      // If observer is already initialized, call the callback immediately with current state
+      if (this._scrollbarModeLast !== null) {
+        callback(this._scrollbarModeLast);
+      }
+      return;
+    }
+
+    const el = document.createElement('div');
+    el.style.cssText =
+      'width:100px;height:100px;overflow:scroll;position:absolute;top:-9999px;';
+    document.body.appendChild(el);
+
+    const check = () => {
+      // Force layout flush – this makes offsetWidth/clientWidth update correctly
+      el.style.display = 'none';
+      el.offsetHeight; // <-- force reflow (read a layout property)
+      el.style.display = '';
+
+      const overlay = el.offsetWidth === el.clientWidth;
+      if (overlay !== this._scrollbarModeLast) {
+        this._scrollbarModeLast = overlay;
+        // Call all registered callbacks
+        this._scrollbarModeCallbacks.forEach((cb) => cb(overlay));
+      }
+    };
+
+    new ResizeObserver(check).observe(el);
+    ['resize', 'orientationchange', 'visibilitychange', 'pageshow'].forEach((ev) =>
+      window.addEventListener(ev, check, { passive: true })
+    );
+
+    this._scrollbarModeObserverInitialized = true;
+    check(); // initial detection
   }
 
   /**
@@ -415,24 +471,26 @@ class DataminrIntegration {
       try {
         const result = await this.sendIntegrationMessage({
           action: 'renderAlertNotification',
-          name: this.userConfig.name
+          name: htmlEscape(this.userConfig.name)
         });
 
         dataminrContainer.innerHTML = result.html || '';
       } catch (error) {
         console.error('Error rendering alert notification template:', error);
         // Fallback to empty content if template rendering fails
-        '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">' +
-          `${this.userConfig.name}` +
+        dataminrContainer.innerHTML =
+          '<div class="dataminr-content"><div class="dataminr-header"><div class="dataminr-header-left"><span class="dataminr-notification-header-title">' +
+          `${htmlEscape(this.userConfig.name)}` +
           '</span></div></div><div class="dataminr-body"></div></div>';
       }
       dataminrIntegrationClass.appendChild(dataminrContainer);
       pinnedPolarityContainer.appendChild(dataminrIntegrationClass);
 
       const borderTopClass = window.polarity
-        ? '.polarity-x-client.dataminr-container'
+        ? '.dataminr-container'
         : '.dataminr-content';
       const contentContainer = qsa(borderTopClass, pinnedPolarityContainer);
+
       if (contentContainer.length > 1) {
         for (const content of contentContainer.slice(1)) {
           content.classList.add('dataminr-no-top-border');
@@ -1832,7 +1890,7 @@ function initDataminr(integration, userConfig, userOptions) {
     window.PolarityUtils = new PolarityUtils();
   }
 
-  const integrationName = userConfig.name.replace(' ', '');
+  const integrationName = htmlEscape(userConfig.name.replaceAll(' ', ''));
   if (!window[integrationName]) {
     window[integrationName] = new DataminrIntegration(
       integration,
@@ -1844,6 +1902,20 @@ function initDataminr(integration, userConfig, userOptions) {
       if (!enterSettings) {
         window[integrationName].init();
       }
+    }, integrationName);
+    // Set up observer to re-size on scrollbar mode changes
+    window.PolarityUtils.trackScrollbarMode((overlay) => {
+      const applyScrollbarClass = () => {
+        const dataminrContainer =
+          window[integrationName].getDataminrContainerForIntegration();
+        if (dataminrContainer) {
+          dataminrContainer.classList.toggle('overlay-scrollbars', overlay);
+        } else {
+          // Container doesn't exist yet, retry after a short delay
+          setTimeout(applyScrollbarClass, 100);
+        }
+      };
+      applyScrollbarClass();
     }, integrationName);
   }
 }

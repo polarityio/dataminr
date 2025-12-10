@@ -59,7 +59,7 @@ const requestWithDefaults = createRequestWithDefaults({
 });
 
 const getToken = async (options) => {
-  const tokenCacheKey = options.apiKey + options.secretKey;
+  const tokenCacheKey = options.clientId + options.clientSecret;
   const cachedToken = tokenCache.get(tokenCacheKey);
   if (cachedToken) return cachedToken;
 

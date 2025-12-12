@@ -102,7 +102,7 @@ const doLookup = async (entities, options, cb) => {
     const err = parseErrorToReadableJson(error);
 
     Logger.error({ error, formattedError: err }, 'Get Lookup Results Failed');
-    cb({ detail: error.message || 'Lookup Failed', err });
+    cb({ detail: error.detail || error.message || 'Lookup Failed', err });
   }
 };
 
@@ -290,7 +290,7 @@ const onMessage = async (payload, options, cb) => {
             { error, formattedError: err, username: username },
             'Failed to get alerts'
           );
-          cb({ detail: error.message || 'Failed to get alerts', err });
+          cb({ detail: error.detail || error.message || 'Failed to get alerts', err });
         }
         break;
 
@@ -321,7 +321,7 @@ const onMessage = async (payload, options, cb) => {
               { error, formattedError: err, alertId: requestedAlertId },
               'Failed to get alert by ID'
             );
-            cb({ detail: error.message || 'Failed to get alert by ID', err });
+            cb({ detail: error.detail || error.message || 'Failed to get alert by ID', err });
           });
         break;
 
@@ -387,9 +387,11 @@ const onMessage = async (payload, options, cb) => {
             cb(null, { lists });
           })
           .catch((error) => {
+            // This should never happen since getLists returns empty array on error
+            // But keeping for safety
             const err = parseErrorToReadableJson(error);
-            Logger.error({ error, formattedError: err }, 'Failed to get lists');
-            cb({ detail: error.message || 'Failed to get lists', err });
+            Logger.error({ error, formattedError: err }, 'Unexpected error in getLists');
+            cb(null, { lists: [] });
           });
         break;
 
@@ -400,7 +402,7 @@ const onMessage = async (payload, options, cb) => {
   } catch (error) {
     const err = parseErrorToReadableJson(error);
     Logger.error({ error, formattedError: err }, 'Message handling failed');
-    cb({ detail: error.message || 'Message handling failed', err });
+    cb({ detail: error.detail || error.message || 'Message handling failed', err });
   }
 };
 

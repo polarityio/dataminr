@@ -11,6 +11,12 @@ const getLists = async (options) => {
   const Logger = getLogger();
 
   try {
+    // Validate required options
+    if (!options || !options.routePrefix) {
+      Logger.warn({ options }, 'Missing routePrefix option, returning empty list');
+      return [];
+    }
+
     Logger.debug('Fetching lists from Dataminr API');
 
     const route = `${options.routePrefix}/v1/lists`;
@@ -43,8 +49,8 @@ const getLists = async (options) => {
 
     return formattedLists;
   } catch (error) {
-    Logger.error({ error }, 'Failed to fetch lists from Dataminr API');
-    throw error;
+    Logger.error({ error, routePrefix: options?.routePrefix }, 'Failed to fetch lists from Dataminr API, returning empty array');
+    return [];
   }
 };
 

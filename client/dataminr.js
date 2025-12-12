@@ -825,6 +825,12 @@ class DataminrIntegration {
       if (detailContainer) {
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
+        
+        // Scroll notification overlay to top when alert is selected
+        const notificationContainer = byId('notification-overlay-scroll-container');
+        if (notificationContainer) {
+          notificationContainer.scrollTop = 0;
+        }
       }
     }
   }
@@ -1122,7 +1128,44 @@ class DataminrIntegration {
   }
 
   /**
+   * Determine which alert type icon should be shown based on filter options
+   * Fallback logic: Alert -> Urgent -> Flash
+   * @private
+   * @returns {string|null} The alert type to show ('Alert', 'Urgent', 'Flash') or null if none selected
+   */
+  getAlertTypeToShow() {
+    // Get configured alert types to watch (default to all if not configured)
+    const alertTypesToWatch = this.userOptions && this.userOptions.setAlertTypesToWatch
+      ? this.userOptions.setAlertTypesToWatch
+      : ['flash', 'urgent', 'alert'];
+    
+    // Normalize to lowercase for comparison
+    // Handle both string arrays and object arrays with {value, display} structure
+    const normalizedTypes = alertTypesToWatch.map(function(type) {
+      // If it's an object with a value property, use that
+      if (type && typeof type === 'object' && type.value) {
+        return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
+      }
+      // Otherwise treat as string
+      return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
+    });
+    
+    // Fallback logic: Alert -> Urgent -> Flash
+    if (normalizedTypes.indexOf('alert') !== -1) {
+      return 'Alert';
+    } else if (normalizedTypes.indexOf('urgent') !== -1) {
+      return 'Urgent';
+    } else if (normalizedTypes.indexOf('flash') !== -1) {
+      return 'Flash';
+    }
+    
+    // Default to Alert if no filter configured or empty array
+    return 'Alert';
+  }
+
+  /**
    * Update alert counts in UI (by type: Flash, Urgent, Alert)
+   * Only shows the icon for the alert type determined by getAlertTypeToShow()
    * @private
    * @param {number} [count] - Optional total count (if not provided, calculates from currentAlertIds)
    */
@@ -1134,11 +1177,15 @@ class DataminrIntegration {
     const integrationContainer = this.getIntegrationContainer();
     if (!integrationContainer) return;
 
+    // Determine which alert type icon should be shown based on filter options
+    const alertTypeToShow = this.getAlertTypeToShow();
+
     // Update Flash count
     const flashIcon = qs('.dataminr-alert-icon-flash', integrationContainer);
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
-      flashIcon.style.display = counts.flash > 0 ? 'inline-block' : 'none';
+      // Only show if it's the selected type to show (fallback logic)
+      flashIcon.style.display = alertTypeToShow === 'Flash' ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
       flashIcon.style.opacity =
@@ -1149,7 +1196,8 @@ class DataminrIntegration {
     const urgentIcon = qs('.dataminr-alert-icon-urgent', integrationContainer);
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
-      urgentIcon.style.display = counts.urgent > 0 ? 'inline-block' : 'none';
+      // Only show if it's the selected type to show (fallback logic)
+      urgentIcon.style.display = alertTypeToShow === 'Urgent' ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
       urgentIcon.style.opacity =
@@ -1160,7 +1208,8 @@ class DataminrIntegration {
     const alertIcon = qs('.dataminr-alert-icon-alert', integrationContainer);
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
-      alertIcon.style.display = counts.alert > 0 ? 'inline-block' : 'none';
+      // Only show if it's the selected type to show (fallback logic)
+      alertIcon.style.display = alertTypeToShow === 'Alert' ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
       alertIcon.style.opacity =
@@ -1332,8 +1381,10 @@ class DataminrIntegration {
     // Always rebuild if filtering is active or container doesn't exist or showAll is true
     // This ensures filtered alerts are properly displayed
     if (!alertsListContainer || showAll || this.currentFilter !== null) {
-      // Clear existing container if it exists
+      // Save scroll position before removing container
+      let savedScrollTop = 0;
       if (alertsListContainer) {
+        savedScrollTop = alertsListContainer.scrollTop;
         alertsListContainer.remove();
       }
       // If there are more than maxVisibleTags alerts, show maxVisibleTags - 1 to leave room for "+ remaining" button
@@ -1387,19 +1438,54 @@ class DataminrIntegration {
       bodyElement.innerHTML = alertsHtml;
       alertsListContainer = qs('.dataminr-alerts-list', integrationContainer);
 
+      // Restore scroll position after DOM is updated and painted
+      if (alertsListContainer && savedScrollTop > 0) {
+        requestAnimationFrame(() => {
+          if (alertsListContainer) {
+            alertsListContainer.scrollTop = savedScrollTop;
+          }
+        });
+      }
+
       // Add click handlers for alert tag buttons to toggle active state and show details
       const alertTagButtons = qsa('.dataminr-tag', integrationContainer);
       alertTagButtons.forEach((button) => {
         button.addEventListener('click', () => {
           const alertId = button.getAttribute('data-alert-id');
 
-          // Handle remaining button click - show all alerts
-          if (alertId === 'remaining') {
-            this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true);
+          // Check if button is already active - if so, just toggle it off (no need to load all alerts)
+          const isActive = button.classList.contains('active');
+          if (isActive) {
+            this.handleAlertTagClick(alertId, button);
             return;
           }
 
-          this.handleAlertTagClick(alertId, button);
+          // Load all alerts first, then handle the click
+          // Store alertId since updateAlertsDisplay will rebuild the UI and button reference will be stale
+          const clickedAlertId = alertId;
+          this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true).then(() => {
+            // Handle remaining button click - just show all alerts, no need to activate
+            if (clickedAlertId === 'remaining') {
+              return;
+            }
+
+            // For regular tag clicks, find and activate the clicked tag
+            const integrationContainer = this.getIntegrationContainer();
+            if (!integrationContainer) return;
+            const allTagButtons = qsa('.dataminr-tag[data-alert-id]', integrationContainer);
+            let tagButton = null;
+            for (let i = 0; i < allTagButtons.length; i++) {
+              const btn = allTagButtons[i];
+              if (btn.getAttribute('data-alert-id') === clickedAlertId) {
+                tagButton = btn;
+                break;
+              }
+            }
+
+            if (tagButton) {
+              this.handleAlertTagClick(clickedAlertId, tagButton);
+            }
+          });
         });
       });
 

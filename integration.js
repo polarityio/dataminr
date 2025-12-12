@@ -74,7 +74,7 @@ const initializePolling = async (options) => {
 };
 
 /**
- * Perform lookup for entities and return matching alerts
+ * Perform Pulse lookup for entities and return matching alerts
  * @param {Array<Object>} entities - Array of entity objects to search for
  * @param {Object} options - Configuration options
  * @param {Function} cb - Callback function (error, results)
@@ -82,6 +82,7 @@ const initializePolling = async (options) => {
  */
 const doLookup = async (entities, options, cb) => {
   try {
+    // Only gets run in the Pulse integration - FirstAlert has no configured entities
     Logger.debug({ entities }, 'Entities');
 
     const searchableEntities = removePrivateIps(entities);
@@ -188,12 +189,39 @@ const onMessage = async (payload, options, cb) => {
         // Use provided timestamp or default to current time if not provided
         const queryTimestamp = sinceTimestamp || new Date().toISOString();
 
+        // Get configured alert types to watch (default to all if not configured)
+        const alertTypesToWatch = options.setAlertTypesToWatch || ['flash', 'urgent', 'alert'];
+        // Normalize to lowercase for comparison
+        // Handle both string arrays and object arrays with {value, display} structure
+        const normalizedAlertTypesToWatch = alertTypesToWatch.map((type) => {
+          // If it's an object with a value property, use that
+          if (type && typeof type === 'object' && type.value) {
+            return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
+          }
+          // Otherwise treat as string
+          return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
+        });
+
+        // Helper function to check if alert type should be included
+        const shouldIncludeAlert = (alert) => {
+          if (!normalizedAlertTypesToWatch || normalizedAlertTypesToWatch.length === 0) {
+            return true; // Include all if no filter configured
+          }
+          const alertTypeName = alert.alertType && alert.alertType.name
+            ? alert.alertType.name.toLowerCase()
+            : 'alert';
+          return normalizedAlertTypesToWatch.indexOf(alertTypeName) !== -1;
+        };
+
         try {
           // Get alerts from global cache (filtered by listIds if provided)
           const cachedAlerts = getCachedAlerts(listIds);
 
+          // Filter cached alerts by alert type
+          const filteredCachedAlerts = cachedAlerts.filter(shouldIncludeAlert);
+
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
-          const needsApiQuery = alertCount && cachedAlerts.length < alertCount;
+          const needsApiQuery = alertCount && filteredCachedAlerts.length < alertCount;
 
           let alerts;
 
@@ -213,11 +241,11 @@ const onMessage = async (payload, options, cb) => {
               null // Timestamp ignored when count is provided
             );
 
-            // Use API alerts (they're the most recent)
-            alerts = apiAlerts;
+            // Filter API alerts by alert type
+            alerts = apiAlerts.filter(shouldIncludeAlert);
           } else {
-            // Use cached alerts (already sorted newest first and filtered by listIds)
-            alerts = cachedAlerts;
+            // Use filtered cached alerts (already sorted newest first and filtered by listIds and alert type)
+            alerts = filteredCachedAlerts;
 
             // Filter alerts by timestamp if timestamp is provided and count is not
             // Since alerts are sorted newest first, we can use early termination

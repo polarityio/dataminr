@@ -1031,12 +1031,15 @@ class DataminrIntegration {
       }
 
       // Remove detail container from UI
-      const detailContainer = qs(
-        `.dataminr-alert-detail[data-alert-id="${alertId}"]`,
-        integrationContainer
-      );
-      if (detailContainer) {
-        detailContainer.remove();
+      const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+      if (dataminrDetailsContainer) {
+        const detailContainer = qs(
+          `.dataminr-alert-detail[data-alert-id="${alertId}"]`,
+          dataminrDetailsContainer
+        );
+        if (detailContainer) {
+          detailContainer.remove();
+        }
       }
 
       // Get all alerts that aren't currently displayed

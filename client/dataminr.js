@@ -1237,7 +1237,8 @@ class DataminrIntegration {
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
       // Only show if it's the selected type to show (fallback logic)
-      flashIcon.style.display = alertTypeToShow === 'Flash' ? 'inline-block' : 'none';
+      const shouldShow = alertTypeToShow === 'Flash' || (counts.flash > 0 && this.shouldIncludeAlertType('Flash'));
+      flashIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
       flashIcon.style.opacity =
@@ -1249,7 +1250,8 @@ class DataminrIntegration {
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
       // Only show if it's the selected type to show (fallback logic)
-      urgentIcon.style.display = alertTypeToShow === 'Urgent' ? 'inline-block' : 'none';
+      const shouldShow = alertTypeToShow === 'Urgent' || (counts.urgent > 0 && this.shouldIncludeAlertType('Urgent'));
+      urgentIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
       urgentIcon.style.opacity =
@@ -1261,7 +1263,8 @@ class DataminrIntegration {
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
       // Only show if it's the selected type to show (fallback logic)
-      alertIcon.style.display = alertTypeToShow === 'Alert' ? 'inline-block' : 'none';
+      const shouldShow = alertTypeToShow === 'Alert' || (counts.alert > 0 && this.shouldIncludeAlertType('Alert'));
+      alertIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
       alertIcon.style.opacity =
@@ -1981,7 +1984,6 @@ class DataminrIntegration {
    * @param {Element} triggerButton - The button that triggered the display
    */
   showEntityDetails(entityData, triggerButton) {
-    console.log('showEntityDetails', entityData, triggerButton);
     if (!entityData || !entityData.name || !triggerButton) {
       console.error('Invalid entity data or trigger button provided to showEntityDetails');
       return;

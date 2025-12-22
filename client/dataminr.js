@@ -823,6 +823,17 @@ class DataminrIntegration {
       }
 
       if (detailContainer) {
+        // Hide entity details for all other alert details before showing this one
+        const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+        if (dataminrDetailsContainer) {
+          const allAlertDetails = qsa('.dataminr-alert-detail', dataminrDetailsContainer);
+          allAlertDetails.forEach((alertDetail) => {
+            if (alertDetail !== detailContainer) {
+              this.hideEntityDetails(alertDetail);
+            }
+          });
+        }
+        
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
         
@@ -1038,6 +1049,8 @@ class DataminrIntegration {
           dataminrDetailsContainer
         );
         if (detailContainer) {
+          // Hide entity details before removing the container
+          this.hideEntityDetails(detailContainer);
           detailContainer.remove();
         }
       }
@@ -1757,6 +1770,7 @@ class DataminrIntegration {
 
       // Set up event delegation for copy buttons (works with dynamically created content)
       this.setupCopyButtonDelegation();
+      this.setupMediaErrorHandling();
 
       // Wait a bit for the UI to be ready, then start polling
       setTimeout(() => {
@@ -1854,6 +1868,468 @@ class DataminrIntegration {
   }
 
   /**
+   * Get the scrollable parent container
+   * @private
+   * @param {Element} element - Element to find scrollable parent for
+   * @returns {Element|Window} The scrollable container or window
+   */
+  getScrollableContainer(element) {
+    // Check for notification overlay scroll container
+    const notificationContainer = byId('notification-overlay-scroll-container');
+    if (notificationContainer) {
+      return notificationContainer;
+    }
+
+    // Check for other common scrollable containers
+    let parent = element.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      if (
+        (style.overflow === 'auto' || style.overflow === 'scroll' || style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        parent.scrollHeight > parent.clientHeight
+      ) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    // Fall back to window
+    return window;
+  }
+
+  /**
+   * Get scroll position from container
+   * @private
+   * @param {Element|Window} container - The scrollable container
+   * @returns {number} The scroll position
+   */
+  getScrollPosition(container) {
+    if (container === window) {
+      return window.pageYOffset || window.scrollY || document.documentElement.scrollTop || 0;
+    }
+    return container.scrollTop || 0;
+  }
+
+  /**
+   * Set scroll position on container
+   * @private
+   * @param {Element|Window} container - The scrollable container
+   * @param {number} position - The scroll position to set
+   */
+  setScrollPosition(container, position) {
+    if (container === window) {
+      window.scrollTo(0, position);
+    } else {
+      container.scrollTop = position;
+    }
+  }
+
+  /**
+   * Show entity details in inline div
+   * @private
+   * @param {Object} entityData - Entity data object with name, type, summary, aliases, url
+   * @param {Element} triggerButton - The button that triggered the display
+   */
+  showEntityDetails(entityData, triggerButton) {
+    console.log('showEntityDetails', entityData, triggerButton);
+    if (!entityData || !entityData.name || !triggerButton) {
+      console.error('Invalid entity data or trigger button provided to showEntityDetails');
+      return;
+    }
+
+    // Find the alert detail container
+    const alertDetail = triggerButton.closest('.dataminr-alert-detail');
+    if (!alertDetail) {
+      console.error('Could not find alert detail container');
+      return;
+    }
+
+    // Find the details container
+    let detailsContainer = alertDetail.querySelector('.dataminr-entity-details-container');
+    if (!detailsContainer) {
+      console.error('Could not find entity details container');
+      return;
+    }
+
+    // Save scroll position before showing entity details
+    const scrollContainer = this.getScrollableContainer(alertDetail);
+    const savedScrollPosition = this.getScrollPosition(scrollContainer);
+    alertDetail.setAttribute('data-saved-scroll-position', savedScrollPosition.toString());
+    if (scrollContainer !== window) {
+      alertDetail.setAttribute('data-scroll-container-id', scrollContainer.id || '');
+    }
+
+    // Hide entity notification classes in notification overlay scroll container
+    this.hideEntityNotifications(alertDetail);
+
+    // Find and hide the alert detail content
+    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    if (alertDetailContent) {
+      alertDetailContent.style.display = 'none';
+    }
+
+    // Get elements
+    const titleElement = detailsContainer.querySelector('.dataminr-entity-details-title');
+    const typeBadge = detailsContainer.querySelector('#dataminr-entity-details-type-badge');
+    const aboutLabel = detailsContainer.querySelector('.dataminr-entity-details-about-label');
+    const aliasesList = detailsContainer.querySelector('.dataminr-entity-details-aliases-list');
+    const aliasesSection = detailsContainer.querySelector('#dataminr-entity-details-aliases-section');
+    const summaryElement = detailsContainer.querySelector('.dataminr-entity-details-summary');
+    const summarySection = detailsContainer.querySelector('#dataminr-entity-details-summary-section');
+    const linkSection = detailsContainer.querySelector('#dataminr-entity-details-link-section');
+    const closeButton = detailsContainer.querySelector('.dataminr-entity-details-close');
+
+    aboutLabel.style.display = 'none';
+    // Populate with entity data
+    if (titleElement) {
+      titleElement.textContent = entityData.name || '';
+    }
+
+    // Type badge in header
+    if (entityData.type && entityData.type.trim()) {
+      if (typeBadge) {
+        typeBadge.textContent = entityData.type;
+        typeBadge.style.display = 'inline-block';
+      }
+    } else {
+      if (typeBadge) {
+        typeBadge.style.display = 'none';
+      }
+    }
+
+    // Summary
+    if (entityData.summary && entityData.summary.trim()) {
+      if (summaryElement) {
+        summaryElement.textContent = entityData.summary;
+      }
+      if (summarySection) {
+        summarySection.style.display = 'block';
+        aboutLabel.style.display = 'inline-block';
+      }
+    } else {
+      if (summarySection) {
+        summarySection.style.display = 'none';
+      }
+    }
+
+    // Aliases
+    if (entityData.aliases && Array.isArray(entityData.aliases) && entityData.aliases.length > 0) {
+      if (aliasesList) {
+        aliasesList.innerHTML = '';
+        entityData.aliases.forEach((alias) => {
+          if (alias && alias.trim()) {
+            const aliasElement = document.createElement('li');
+            aliasElement.textContent = alias;
+            aliasesList.appendChild(aliasElement);
+          }
+        });
+      }
+      if (aliasesSection) {
+        aliasesSection.style.display = 'block';
+        aboutLabel.style.display = 'inline-block';
+      }
+    } else {
+      if (aliasesSection) {
+        aliasesSection.style.display = 'none';
+      }
+    }
+
+    // Link to Dataminr
+    if (entityData.url && entityData.url.trim()) {
+      const linkBtn = detailsContainer.querySelector('#dataminr-entity-details-link-btn');
+      if (linkBtn) {
+        linkBtn.href = entityData.url;
+      }
+      if (linkSection) {
+        linkSection.style.display = 'block';
+      }
+    } else {
+      if (linkSection) {
+        linkSection.style.display = 'none';
+      }
+    }
+
+    // Set up close button handler if not already set
+    if (closeButton && !closeButton.hasAttribute('data-handler-attached')) {
+      closeButton.setAttribute('data-handler-attached', 'true');
+      closeButton.addEventListener('click', () => {
+        this.hideEntityDetails(alertDetail);
+      });
+    }
+
+    // Show the details container
+    detailsContainer.style.display = 'block';
+
+    // Scroll to the top when opening entity details
+    // Use setTimeout to ensure the display change has taken effect
+    setTimeout(() => {
+      // Scroll the scrollable container so entity details container is at the top
+      const scrollContainer = this.getScrollableContainer(alertDetail);
+      const alertDetailRect = alertDetail.getBoundingClientRect();
+      const paddingTop = 10; // .dataminr-alert-detail has padding: 10px
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const relativeTop = alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
+      scrollContainer.scrollTop = Math.max(0, relativeTop);
+    }, 0);
+  }
+
+  /**
+   * Hide entity details
+   * @private
+   * @param {Element} alertDetail - The alert detail element
+   */
+  hideEntityDetails(alertDetail) {
+    if (!alertDetail) {
+      return;
+    }
+
+    const detailsContainer = alertDetail.querySelector('.dataminr-entity-details-container');
+    if (detailsContainer) {
+      detailsContainer.style.display = 'none';
+    }
+
+    // Restore entity notification classes in notification overlay scroll container
+    this.restoreEntityNotifications(alertDetail);
+
+    // Show the alert detail content
+    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    if (alertDetailContent) {
+      alertDetailContent.style.display = 'block';
+    }
+
+    // Restore scroll position
+    const savedScrollPosition = alertDetail.getAttribute('data-saved-scroll-position');
+    if (savedScrollPosition !== null) {
+      const scrollPosition = parseFloat(savedScrollPosition);
+      const scrollContainerId = alertDetail.getAttribute('data-scroll-container-id');
+      
+      let scrollContainer;
+      if (scrollContainerId) {
+        scrollContainer = byId(scrollContainerId);
+      }
+      
+      if (!scrollContainer) {
+        scrollContainer = this.getScrollableContainer(alertDetail);
+      }
+
+      // Use requestAnimationFrame to ensure DOM has updated before scrolling
+      requestAnimationFrame(() => {
+        this.setScrollPosition(scrollContainer, scrollPosition);
+        // Clean up the saved scroll position attributes
+        alertDetail.removeAttribute('data-saved-scroll-position');
+        alertDetail.removeAttribute('data-scroll-container-id');
+      });
+    }
+  }
+
+  /**
+   * Hide entity notification classes in notification overlay scroll container
+   * @private
+   * @param {Element} alertDetail - The alert detail element
+   */
+  hideEntityNotifications(alertDetail) {
+    const notificationContainer = byId('notification-overlay-scroll-container');
+    if (!notificationContainer) {
+      return;
+    }
+
+    // Find all elements with classes matching _entity-notification* pattern
+    const allElements = notificationContainer.querySelectorAll('*');
+    const hiddenElements = [];
+    
+    allElements.forEach((element) => {
+      // Check if element has any class starting with _entity-notification
+      const classList = Array.from(element.classList);
+      const hasEntityNotificationClass = classList.some((className) => {
+        return className.indexOf('_entity-notification') === 0;
+      });
+
+      if (hasEntityNotificationClass) {
+        // Save current display state
+        const currentDisplay = window.getComputedStyle(element).display;
+        if (currentDisplay !== 'none') {
+          element.setAttribute('data-saved-display', currentDisplay);
+          element.style.display = 'none';
+          hiddenElements.push(element);
+        }
+      }
+    });
+
+    // Store reference to hidden elements on alertDetail for restoration
+    if (hiddenElements.length > 0) {
+      alertDetail.setAttribute('data-hidden-entity-notifications', hiddenElements.length.toString());
+      // Store elements in a way we can access them later
+      if (!alertDetail._hiddenEntityNotifications) {
+        alertDetail._hiddenEntityNotifications = [];
+      }
+      alertDetail._hiddenEntityNotifications = hiddenElements;
+    }
+  }
+
+  /**
+   * Restore entity notification classes in notification overlay scroll container
+   * @private
+   * @param {Element} alertDetail - The alert detail element
+   */
+  restoreEntityNotifications(alertDetail) {
+    if (!alertDetail || !alertDetail._hiddenEntityNotifications) {
+      return;
+    }
+
+    // Restore display state for all hidden elements
+    alertDetail._hiddenEntityNotifications.forEach((element) => {
+      const savedDisplay = element.getAttribute('data-saved-display');
+      if (savedDisplay) {
+        element.style.display = savedDisplay;
+        element.removeAttribute('data-saved-display');
+      } else {
+        // Fallback: remove inline display style to restore original
+        element.style.display = '';
+      }
+    });
+
+    // Clean up
+    alertDetail._hiddenEntityNotifications = null;
+    alertDetail.removeAttribute('data-hidden-entity-notifications');
+  }
+
+  /**
+   * Show media fallback when media fails to load
+   * @private
+   * @param {HTMLElement} mediaElement - The media element (video/audio) that failed
+   */
+  showMediaFallback(mediaElement) {
+    const container = mediaElement.parentElement;
+    if (container && container.classList && container.classList.contains('dataminr-media-container')) {
+      const fallback = container.querySelector('.dataminr-media-fallback');
+      if (fallback) {
+        mediaElement.style.display = 'none';
+        fallback.style.display = 'block';
+      }
+    }
+  }
+
+  /**
+   * Set up error handling for external media (video, audio, etc.)
+   * @private
+   */
+  setupMediaErrorHandling() {
+    const self = this;
+    
+    // Function to attach error handlers to a media element (video or audio)
+    const attachMediaErrorHandler = (mediaElement) => {
+      if (!mediaElement || mediaElement.dataset.errorHandlerAttached) {
+        return;
+      }
+      
+      mediaElement.dataset.errorHandlerAttached = 'true';
+      
+      // Handle error event
+      mediaElement.addEventListener('error', function() {
+        self.showMediaFallback(mediaElement);
+      });
+      
+      // Handle loadstart/loadeddata to detect CORS/403 errors
+      // If media doesn't load within a reasonable time, show fallback
+      let loadTimeout = null;
+      let hasLoadedData = false;
+      
+      const checkLoadStatus = () => {
+        // Both video and audio have readyState property
+        if (!hasLoadedData && mediaElement.readyState === 0) {
+          // Media hasn't started loading, might be blocked
+          loadTimeout = setTimeout(() => {
+            if (!hasLoadedData && mediaElement.readyState === 0) {
+              self.showMediaFallback(mediaElement);
+            }
+          }, 3000); // Wait 3 seconds for media to start loading
+        }
+      };
+      
+      mediaElement.addEventListener('loadstart', () => {
+        hasLoadedData = false;
+        if (loadTimeout) {
+          clearTimeout(loadTimeout);
+        }
+        checkLoadStatus();
+      });
+      
+      mediaElement.addEventListener('loadeddata', () => {
+        hasLoadedData = true;
+        if (loadTimeout) {
+          clearTimeout(loadTimeout);
+        }
+      });
+      
+      // Video-specific: stalled event
+      if (mediaElement.tagName === 'VIDEO') {
+        mediaElement.addEventListener('stalled', () => {
+          // Media stalled, might be blocked
+          if (!hasLoadedData) {
+            self.showMediaFallback(mediaElement);
+          }
+        });
+      }
+      
+      // Check immediately if media is already in error state (video only)
+      if (mediaElement.error && mediaElement.error.code !== 0) {
+        self.showMediaFallback(mediaElement);
+      }
+      
+      // Also check after a short delay to catch CORS errors that don't fire error events immediately
+      setTimeout(() => {
+        if (mediaElement.readyState === 0 && !hasLoadedData) {
+          // Media hasn't loaded, likely blocked
+          self.showMediaFallback(mediaElement);
+        }
+      }, 2000);
+    };
+    
+    // Set up MutationObserver to catch dynamically added media elements
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === 1) { // Element node
+            // Check if the added node is a media element or contains media elements
+            let mediaElements = [];
+            
+            if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') {
+              if (node.classList && node.classList.contains('dataminr-media-player')) {
+                mediaElements = [node];
+              }
+            } else if (node.querySelectorAll) {
+              // Find all media players
+              const videos = node.querySelectorAll('video.dataminr-media-player');
+              const audios = node.querySelectorAll('audio.dataminr-media-player');
+              mediaElements = Array.from(videos).concat(Array.from(audios));
+            }
+            
+            mediaElements.forEach((mediaElement) => {
+              if (mediaElement.classList && mediaElement.classList.contains('dataminr-media-player')) {
+                attachMediaErrorHandler(mediaElement);
+              }
+            });
+          }
+        });
+      });
+    });
+    
+    // Observe the document body for new media elements
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // Also attach handlers to any existing media elements
+    const existingVideos = document.querySelectorAll('video.dataminr-media-player');
+    const existingAudios = document.querySelectorAll('audio.dataminr-media-player');
+    const existingMedia = Array.from(existingVideos).concat(Array.from(existingAudios));
+    existingMedia.forEach((mediaElement) => {
+      attachMediaErrorHandler(mediaElement);
+    });
+  }
+
+  /**
    * Set up event delegation for copy buttons and image modals
    * @private
    */
@@ -1897,6 +2373,52 @@ class DataminrIntegration {
         const imageSrc = imageTrigger.getAttribute('data-image-src') || imageTrigger.src;
         if (imageSrc) {
           this.showImageModal(imageSrc);
+        }
+        return;
+      }
+
+      // Handle entity details trigger
+      const entityTrigger = e.target.closest('.dataminr-entity-details-trigger');
+      if (entityTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const entityName = entityTrigger.getAttribute('data-entity-name') || '';
+        const entityType = entityTrigger.getAttribute('data-entity-type') || '';
+        const entitySummary = entityTrigger.getAttribute('data-entity-summary') || '';
+        const entityAliasesStr = entityTrigger.getAttribute('data-entity-aliases') || '';
+        const entityUrl = entityTrigger.getAttribute('data-entity-url') || '';
+
+        // Parse aliases from comma-separated string
+        const entityAliases = entityAliasesStr
+          ? entityAliasesStr.split(',').map((alias) => alias.trim()).filter((alias) => alias)
+          : [];
+
+        if (entityName) {
+          // Find the alert detail container
+          const alertDetail = entityTrigger.closest('.dataminr-alert-detail');
+          if (alertDetail) {
+            // Hide any currently visible entity details
+            const existingDetails = alertDetail.querySelector('.dataminr-entity-details-container');
+            if (existingDetails && existingDetails.style.display !== 'none') {
+              this.hideEntityDetails(alertDetail);
+              // If clicking the same entity, just hide it (toggle behavior)
+              const currentTitle = existingDetails.querySelector('.dataminr-entity-details-title');
+              if (currentTitle && currentTitle.textContent === entityName) {
+                return;
+              }
+            }
+            // Show the entity details
+            this.showEntityDetails(
+              {
+                name: entityName,
+                type: entityType,
+                summary: entitySummary,
+                aliases: entityAliases,
+                url: entityUrl
+              },
+              entityTrigger
+            );
+          }
         }
         return;
       }

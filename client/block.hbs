@@ -290,11 +290,14 @@
                   >Discovered Entities ({{alert.discoveredEntities.length}})</div>
                   <div class="dataminr-alert-intel-agents-discovered-entities-list">
                     {{#each alert.discoveredEntities as |entity|}}
-                      <a
-                        href="{{entity.url}}"
-                        class="dataminr-alert-intel-agents-discovered-entity-item"
-                        target="_blank"
-                        title="View entity in Dataminr"
+                      <button
+                        class="dataminr-alert-intel-agents-discovered-entity-item dataminr-entity-details-trigger"
+                        data-entity-name="{{entity.name}}"
+                        data-entity-type="{{entity.type}}"
+                        data-entity-summary="{{entity.summary}}"
+                        data-entity-aliases="{{entity.aliasesFormatted}}"
+                        data-entity-url="{{entity.url}}"
+                        title="View entity details"
                       >
                         <svg height="22" width="22" viewBox="0 0 24 24" fill="none">
                           <path
@@ -303,7 +306,7 @@
                           ></path>
                         </svg>
                         {{entity.name}}
-                      </a>
+                      </button>
                     {{/each}}
                   </div>
                 </div>
@@ -356,22 +359,36 @@
                   {{else}}
                     {{#each mediaGroup.media as |mediaItem|}}
                       {{#if (eq mediaItem.type "video")}}
-                        <video
-                          aria-label="Video player"
-                          controls
-                          controlslist="nodownload"
-                          style="width: 100%;"
-                          src="{{mediaItem.href}}"
-                        />
+                        <div class="dataminr-media-container dataminr-video-container">
+                          <video class="dataminr-media-player dataminr-video-player" aria-label="Video player" controls controlslist="nodownload" style="width: 100%;" src="{{mediaItem.href}}" data-media-url="{{mediaItem.href}}" crossorigin="anonymous"></video>
+                          <div class="dataminr-media-fallback" style="display: none;">
+                            <div class="dataminr-media-fallback-message">
+                              <p>Video cannot be embedded due to access restrictions.</p>
+                              <a href="{{mediaItem.href}}" target="_blank" rel="noopener noreferrer" class="dataminr-media-fallback-link">
+                                Open video in new tab
+                                <svg height="16" width="16" viewBox="0 0 24 24" fill="none" style="display: inline-block; vertical-align: middle; margin-left: 4px;">
+                                  <path d="M19 19H5V5H12V3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V12H19V19ZM14 3V5H17.59L7.76 14.83L9.17 16.24L19 6.41V10H21V3H14Z" fill="currentColor"/>
+                                </svg>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
                       {{/if}}
                       {{#if (eq mediaItem.type "audio")}}
-                        <audio
-                          aria-label="Audio player"
-                          controls
-                          controlslist="nodownload"
-                          style="width: 100%;"
-                          src="{{mediaItem.href}}"
-                        />
+                        <div class="dataminr-media-container dataminr-audio-container">
+                          <audio class="dataminr-audio-player" aria-label="Audio player" controls controlslist="nodownload" style="width: 100%;" src="{{mediaItem.href}}" data-media-url="{{mediaItem.href}}" crossorigin="anonymous"></audio>
+                          <div class="dataminr-media-fallback" style="display: none;">
+                            <div class="dataminr-media-fallback-message">
+                              <p>Audio cannot be embedded due to access restrictions.</p>
+                              <a href="{{mediaItem.href}}" target="_blank" rel="noopener noreferrer" class="dataminr-media-fallback-link">
+                                Open audio in new tab
+                                <svg height="16" width="16" viewBox="0 0 24 24" fill="none" style="display: inline-block; vertical-align: middle; margin-left: 4px;">
+                                  <path d="M19 19H5V5H12V3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V12H19V19ZM14 3V5H17.59L7.76 14.83L9.17 16.24L19 6.41V10H21V3H14Z" fill="currentColor"/>
+                                </svg>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
                       {{/if}}
                     {{/each}}
                   {{/if}}
@@ -535,6 +552,63 @@
             </div>
           {{/if}}
         {{/if}}
+      </div>
+      <div class="dataminr-entity-details-container" style="display: none;">
+        <div class="dataminr-entity-details-content">
+          <header class="dataminr-entity-details-header">
+            <section class="dataminr-entity-details-header-left">
+              <div class="dataminr-entity-details-title-group">
+                <div class="dataminr-entity-details-title-row">
+                  <svg height="24" width="24" viewBox="0 0 24 24" fill="none" class="dataminr-entity-details-icon">
+                    <path d="M6.2625 18.0125C7.77083 20.0875 9.68333 21.4167 12 22C14.3167 21.4167 16.2292 20.0875 17.7375 18.0125C19.2458 15.9375 20 13.6333 20 11.1V5L12 2L4 5V11.1C4 13.6333 4.75417 15.9375 6.2625 18.0125ZM16.3 16.6C15.1667 18.25 13.7333 19.35 12 19.9C10.2667 19.35 8.83333 18.25 7.7 16.6C6.56667 14.95 6 13.1167 6 11.1V6.375L12 4.125L18 6.375V11.1C18 13.1167 17.4333 14.95 16.3 16.6ZM11 14V16H13V14H11ZM11 8V12H13V8H11Z" fill="currentColor"></path>
+                  </svg>
+                  <h3 class="dataminr-entity-details-title"></h3>
+                </div>
+                <span class="dataminr-entity-details-type-badge" id="dataminr-entity-details-type-badge" style="display: none;"></span>
+                <div><span class="dataminr-entity-details-about-label" style="display: none;">About</span></div>
+              </div>
+              <div class="dataminr-entity-details-close-wrapper">
+                <button class="dataminr-entity-details-close" aria-label="Back to alert details" name="close">
+                  <svg height="24" width="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M15.41 7.41L14 6L8 12L14 18L15.41 16.59L10.83 12L15.41 7.41Z" fill="currentColor"/>
+                  </svg>
+                  <span class="dataminr-entity-details-back-text">Back</span>
+                </button>
+              </div>
+            </section>
+          </header>
+          <section class="dataminr-entity-details-body">
+            <section class="dataminr-entity-details-body-content">
+              <div class="dataminr-entity-details-tab-panel">
+                <div class="dataminr-entity-details-sections">
+                  <div class="dataminr-entity-details-card" id="dataminr-entity-details-summary-section" style="display: none;">
+                    <article class="dataminr-entity-details-card-content">
+                      <div class="dataminr-entity-details-summary-wrapper">
+                        <p class="dataminr-entity-details-summary"></p>
+                      </div>
+                    </article>
+                  </div>
+                  <div class="dataminr-entity-details-card" id="dataminr-entity-details-aliases-section" style="display: none;">
+                    <article class="dataminr-entity-details-card-content">
+                      <h3 class="dataminr-entity-details-card-heading">Aliases</h3>
+                      <div class="dataminr-entity-details-card-body">
+                        <ul class="dataminr-entity-details-aliases-list"></ul>
+                      </div>
+                    </article>
+                  </div>
+                  <div class="dataminr-entity-details-link" id="dataminr-entity-details-link-section" style="display: none;">
+                    <a href="#" class="dataminr-entity-details-link-btn" target="_blank" rel="noopener noreferrer" id="dataminr-entity-details-link-btn">
+                      View in Dataminr
+                      <svg height="22" width="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M19 19H5V5H12V3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V12H19V19ZM14 3V5H17.59L7.76 14.83L9.17 16.24L19 6.41V10H21V3H14Z" fill="currentColor"/>
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </section>
+        </div>
       </div>
     </div>
   {{/each}}

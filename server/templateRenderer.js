@@ -457,7 +457,21 @@ function processDiscoveredEntities(agents, alertUrl) {
           const entityDetailUrl = alertUrl
             ? alertUrl.replace('https://app.dataminr.com/#', baseUrl)
             : '';
-          discoveredEntities.push({ name: entity.name, url: entityDetailUrl });
+          // Format aliases as comma-separated string for data attribute
+          const aliasesArray = entity.aliases || [];
+          const aliasesFormatted = Array.isArray(aliasesArray)
+            ? aliasesArray.filter((alias) => alias && alias.trim()).join(',')
+            : '';
+
+          // Include full entity data for modal display
+          discoveredEntities.push({
+            name: entity.name,
+            url: entityDetailUrl,
+            aliases: aliasesArray,
+            aliasesFormatted: aliasesFormatted,
+            summary: entity.summary || '',
+            type: entity.type || ''
+          });
         }
       });
     }

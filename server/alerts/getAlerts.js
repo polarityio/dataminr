@@ -94,10 +94,13 @@ const getAlerts = async (
       'Dataminr API response received'
     );
 
+    const rawAlertCount = response.body && response.body.alerts ? response.body.alerts.length : 0;
+
     return {
       alerts: alerts,
       nextPage: (response.body && response.body.nextPage) || null,
-      previousPage: (response.body && response.body.previousPage) || null
+      previousPage: (response.body && response.body.previousPage) || null,
+      rawAlertCount: rawAlertCount // Count of alerts fetched from API before filtering
     };
   } catch (error) {
     const err = parseErrorToReadableJson(error);

@@ -6,6 +6,16 @@ const {
 const { getAlerts } = require('./getAlerts');
 const { getPollingState, updatePollingState } = require('./stateManager');
 const { processAlerts } = require('./alertProcessor');
+const { MAX_PAGE_SIZE } = require('../constants');
+
+/**
+ * Sleep for a specified number of milliseconds
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+const sleep = (ms) => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
 
 /**
  * Poll the API for new alerts and process them
@@ -31,13 +41,18 @@ const pollAlerts = async (options) => {
     let totalAlertsProcessed = 0;
     let paginationCursor = null;
     let hasMore = false;
+    let pageCount = 0;
     const lastPollTimestamp = state.lastPollTime;
 
     // First poll: get 10 alerts to start
     // Subsequent polls: get all alerts since lastPollTime by paginating through all pages
+    let totalAlertsFetched = 0; // Track total alerts fetched from API (before filtering)
+    
     if (isFirstPoll) {
       Logger.debug('First poll: fetching 10 alerts');
-      const { alerts, nextPage } = await getAlerts(options, null, 10, null);
+      pageCount = 1; // First poll is always 1 page
+      const { alerts, nextPage, rawAlertCount } = await getAlerts(options, null, 10, null);
+      totalAlertsFetched = rawAlertCount || 10; // First poll fetches up to 10 alerts
       
       if (alerts.length > 0) {
         await processAlerts(alerts, options);
@@ -55,19 +70,23 @@ const pollAlerts = async (options) => {
       );
 
       let continuePaging = true;
-      let pageCount = 0;
-      const maxPages = 1000; // Safety limit to prevent infinite loops
+      pageCount = 0; // Reset page count for subsequent polls
+      totalAlertsFetched = 0; // Reset for subsequent polls
+      const maxPages = 50; // Limit to 50 pages (500 alerts) per polling period to avoid rate limiting
 
       while (continuePaging && pageCount < maxPages) {
         pageCount++;
         
         // Fetch a page of alerts (getAlerts will filter by timestamp client-side)
-        const { alerts, nextPage } = await getAlerts(
+        const { alerts, nextPage, rawAlertCount } = await getAlerts(
           options,
           paginationCursor,
           null, // No count limit - use timestamp filtering
           lastPollTimestamp
         );
+
+        // Track total alerts fetched from API (before filtering)
+        totalAlertsFetched += rawAlertCount || 0;
 
         // Process alerts from this page
         if (alerts.length > 0) {
@@ -92,11 +111,11 @@ const pollAlerts = async (options) => {
 
         // Continue paging if:
         // 1. There's a nextPage AND
-        // 2. We got alerts from this page (meaning there might be more newer alerts)
-        // Stop if we got 0 alerts (all alerts on this page are older than lastPollTime)
-        // Since alerts are sorted newest first, if a page has 0 matching alerts,
+        // 2. We got a full page of alerts (10) after filtering
+        // Stop if we got fewer than 10 alerts - this means we've hit alerts older than lastPollTime
+        // Since alerts are sorted newest first, if a page has fewer than 10 matching alerts,
         // all subsequent pages will also be older
-        continuePaging = !!nextPage && alerts.length > 0;
+        continuePaging = !!nextPage && alerts.length === MAX_PAGE_SIZE;
         
         Logger.debug(
           {
@@ -108,6 +127,12 @@ const pollAlerts = async (options) => {
           },
           'Processed page of alerts'
         );
+
+        // Add a small delay between page requests to avoid rate limiting
+        // Only delay if we're continuing to the next page
+        if (continuePaging) {
+          await sleep(200); // 200ms delay between pages
+        }
       }
 
       if (pageCount >= maxPages) {
@@ -130,6 +155,8 @@ const pollAlerts = async (options) => {
     Logger.debug(
       {
         isFirstPoll,
+        pageCount,
+        totalAlertsFetched,
         totalAlertsProcessed,
         totalProcessed: state.totalAlertsProcessed + totalAlertsProcessed,
         hasMore

@@ -51,7 +51,7 @@
     {
       "key": "stickyAlerts",
       "name": "Pin Dataminr Alerts",
-      "description": "Pin Dataminr Alerts to the top of the Polarity UI",
+      "description": "Pin Dataminr Alerts to the top of the Polarity UI. User provides option value.",
       "default": false,
       "type": "boolean",
       "userCanEdit": true,

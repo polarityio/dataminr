@@ -190,7 +190,10 @@ const onMessage = async (payload, options, cb) => {
         const queryTimestamp = sinceTimestamp || new Date().toISOString();
 
         // Get configured alert types to watch (default to all if not configured)
-        const alertTypesToWatch = options.setAlertTypesToWatch || ['flash', 'urgent', 'alert'];
+        const alertTypesToWatch = (options.setAlertTypesToWatch && 
+                                   options.setAlertTypesToWatch.length > 0)
+          ? options.setAlertTypesToWatch
+          : ['flash', 'urgent', 'alert'];
         // Normalize to lowercase for comparison
         // Handle both string arrays and object arrays with {value, display} structure
         const normalizedAlertTypesToWatch = alertTypesToWatch.map((type) => {

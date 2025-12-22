@@ -1151,7 +1151,9 @@ class DataminrIntegration {
    */
   getAlertTypeToShow() {
     // Get configured alert types to watch (default to all if not configured)
-    const alertTypesToWatch = this.userOptions && this.userOptions.setAlertTypesToWatch
+    const alertTypesToWatch = (this.userOptions && 
+                               this.userOptions.setAlertTypesToWatch && 
+                               this.userOptions.setAlertTypesToWatch.length > 0)
       ? this.userOptions.setAlertTypesToWatch
       : ['flash', 'urgent', 'alert'];
     

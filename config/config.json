@@ -73,7 +73,20 @@
       "name": "Filter Alert Types",
       "description": "Filter the alert types retrieved for pinned alerts",
       "type": "select",
-      "default": ["flash", "urgent", "alert"],
+      "default": [
+        {
+          "value": "flash",
+          "display": "Flash"
+        },
+        {
+          "value": "urgent",
+          "display": "Urgent"
+        },
+        {
+          "value": "alert",
+          "display": "Alert"
+        }
+      ],
       "userCanEdit": false,
       "adminOnly": true,
       "multiple": true,

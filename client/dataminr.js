@@ -555,6 +555,28 @@ class DataminrIntegration {
   }
 
   /**
+   * Watch a tracked map
+   * @param {Map} map - The map to watch
+   * @param {Function} onChange - The function to call when the map changes
+   * @returns {Map} The map
+   */
+  watchTrackedMap(map, onChange) {
+    ['set', 'delete', 'clear'].forEach((method) => {
+      const orig = map[method].bind(map);
+      map[method] = (...args) => {
+        const before = map.size;
+        const result = orig(...args);
+        const after = map.size;
+        if (after !== before) {
+          onChange({ op: method, before, after, args });
+        }
+        return result;
+      };
+    });
+    return map;
+  }
+
+  /**
    * Copy text to clipboard with fallback
    * @private
    * @param {string} textToCopy - Text to copy to clipboard
@@ -575,6 +597,107 @@ class DataminrIntegration {
         });
     } else {
       fallbackCopyTextToClipboard(textToCopy);
+    }
+  }
+
+  /**
+   * Submit metadata values sequentially as separate search queries to Polarity
+   * @param {Array<string>} values - Array of metadata values to search
+   * @private
+   */
+  submitMetadataSearchesSequentially(values) {
+    if (!values || values.length === 0) return;
+
+    const self = this;
+    let currentIndex = 0;
+
+    const submitNext = function () {
+      if (currentIndex >= values.length) {
+        // All searches submitted, clear the input
+        self.clearSearchInput();
+        return;
+      }
+
+      const value = values[currentIndex];
+      self.submitMetadataSearch(value);
+      currentIndex++;
+
+      // Submit next value after a short delay
+      if (currentIndex < values.length) {
+        setTimeout(submitNext, 200);
+      } else {
+        // Last search, clear input after a delay
+        setTimeout(function () {
+          self.clearSearchInput();
+        }, 200);
+      }
+    };
+
+    // Start submitting
+    submitNext();
+  }
+
+  /**
+   * Clear the search input field
+   * @private
+   */
+  clearSearchInput() {
+    let searchInput = null;
+    if (window.polarity) {
+      searchInput = qs('[data-test-target="notifications-search-bar-input"]');
+    } else {
+      searchInput = byId('search-query');
+    }
+
+    if (searchInput) {
+      searchInput.value = '';
+      // Trigger input event to notify any listeners that the value changed
+      const inputEvent = new Event('input', { bubbles: true });
+      searchInput.dispatchEvent(inputEvent);
+      // Unfocus the input field
+      searchInput.blur();
+    }
+  }
+
+  /**
+   * Submit a single metadata value as a search query to Polarity
+   * @param {string} entityName - The search query string
+   * @private
+   */
+  submitMetadataSearch(entityName) {
+    if (!entityName) return;
+
+    let searchInput = null;
+    if (window.polarity) {
+      searchInput = qs('[data-test-target="notifications-search-bar-input"]');
+    } else {
+      searchInput = byId('search-query');
+    }
+
+    if (searchInput) {
+      searchInput.value = entityName;
+      // Trigger input event to notify any listeners that the value changed
+      const inputEvent = new Event('input', { bubbles: true });
+      searchInput.dispatchEvent(inputEvent);
+
+      // Try clicking the search button
+      let searchButton = null;
+      if (window.polarity) {
+        searchButton = qs('[data-test-target="notifications-search-bar-btn"]');
+      } else {
+        searchButton = qs('[data-test-target="search-button"]');
+      }
+
+      if (searchButton) {
+        // Enable the button if it's disabled
+        if (searchButton.disabled) {
+          searchButton.disabled = false;
+        }
+        if (searchButton.classList.contains('disabled')) {
+          searchButton.classList.remove('disabled');
+        }
+        searchButton.click();
+      }
     }
   }
 
@@ -833,10 +956,10 @@ class DataminrIntegration {
             }
           });
         }
-        
+
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
-        
+
         // Scroll notification overlay to top when alert is selected
         const notificationContainer = byId('notification-overlay-scroll-container');
         if (notificationContainer) {
@@ -1126,22 +1249,25 @@ class DataminrIntegration {
    */
   shouldIncludeAlertType(alertType) {
     // Get configured alert types to watch (default to all if not configured)
-    const alertTypesToWatch = (this.userOptions && 
-                               this.userOptions.setAlertTypesToWatch && 
-                               this.userOptions.setAlertTypesToWatch.length > 0)
-      ? this.userOptions.setAlertTypesToWatch
-      : ['flash', 'urgent', 'alert'];
-    
+    const alertTypesToWatch =
+      this.userOptions &&
+      this.userOptions.setAlertTypesToWatch &&
+      this.userOptions.setAlertTypesToWatch.length > 0
+        ? this.userOptions.setAlertTypesToWatch
+        : ['flash', 'urgent', 'alert'];
+
     // Normalize to lowercase for comparison
     const normalizedTypes = alertTypesToWatch.map((type) => {
       // If it's an object with a value property, use that
       if (type && typeof type === 'object' && type.value) {
-        return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
+        return typeof type.value === 'string'
+          ? type.value.toLowerCase()
+          : String(type.value).toLowerCase();
       }
       // Otherwise treat as string
       return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
     });
-    
+
     const normalizedAlertType = alertType ? alertType.toLowerCase() : 'alert';
     return normalizedTypes.indexOf(normalizedAlertType) !== -1;
   }
@@ -1155,12 +1281,12 @@ class DataminrIntegration {
 
     this.currentAlertIds.forEach((alert) => {
       const alertType = this.getAlertType(alert);
-      
+
       // Only count alerts that match alertTypesToWatch configuration
       if (!this.shouldIncludeAlertType(alertType)) {
         return;
       }
-      
+
       const normalizedType = alertType.toLowerCase();
 
       if (normalizedType === 'flash') {
@@ -1185,23 +1311,26 @@ class DataminrIntegration {
    */
   getAlertTypeToShow() {
     // Get configured alert types to watch (default to all if not configured)
-    const alertTypesToWatch = (this.userOptions && 
-                               this.userOptions.setAlertTypesToWatch && 
-                               this.userOptions.setAlertTypesToWatch.length > 0)
-      ? this.userOptions.setAlertTypesToWatch
-      : ['flash', 'urgent', 'alert'];
-    
+    const alertTypesToWatch =
+      this.userOptions &&
+      this.userOptions.setAlertTypesToWatch &&
+      this.userOptions.setAlertTypesToWatch.length > 0
+        ? this.userOptions.setAlertTypesToWatch
+        : ['flash', 'urgent', 'alert'];
+
     // Normalize to lowercase for comparison
     // Handle both string arrays and object arrays with {value, display} structure
-    const normalizedTypes = alertTypesToWatch.map(function(type) {
+    const normalizedTypes = alertTypesToWatch.map(function (type) {
       // If it's an object with a value property, use that
       if (type && typeof type === 'object' && type.value) {
-        return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
+        return typeof type.value === 'string'
+          ? type.value.toLowerCase()
+          : String(type.value).toLowerCase();
       }
       // Otherwise treat as string
       return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
     });
-    
+
     // Fallback logic: Alert -> Urgent -> Flash
     if (normalizedTypes.indexOf('alert') !== -1) {
       return 'Alert';
@@ -1210,7 +1339,7 @@ class DataminrIntegration {
     } else if (normalizedTypes.indexOf('flash') !== -1) {
       return 'Flash';
     }
-    
+
     // Default to Alert if no filter configured or empty array
     return 'Alert';
   }
@@ -1237,7 +1366,9 @@ class DataminrIntegration {
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
       // Only show if it's the selected type to show (fallback logic)
-      const shouldShow = alertTypeToShow === 'Flash' || (counts.flash > 0 && this.shouldIncludeAlertType('Flash'));
+      const shouldShow =
+        alertTypeToShow === 'Flash' ||
+        (counts.flash > 0 && this.shouldIncludeAlertType('Flash'));
       flashIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
@@ -1250,7 +1381,9 @@ class DataminrIntegration {
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
       // Only show if it's the selected type to show (fallback logic)
-      const shouldShow = alertTypeToShow === 'Urgent' || (counts.urgent > 0 && this.shouldIncludeAlertType('Urgent'));
+      const shouldShow =
+        alertTypeToShow === 'Urgent' ||
+        (counts.urgent > 0 && this.shouldIncludeAlertType('Urgent'));
       urgentIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
@@ -1263,7 +1396,9 @@ class DataminrIntegration {
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
       // Only show if it's the selected type to show (fallback logic)
-      const shouldShow = alertTypeToShow === 'Alert' || (counts.alert > 0 && this.shouldIncludeAlertType('Alert'));
+      const shouldShow =
+        alertTypeToShow === 'Alert' ||
+        (counts.alert > 0 && this.shouldIncludeAlertType('Alert'));
       alertIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
@@ -1524,29 +1659,34 @@ class DataminrIntegration {
           // Load all alerts first, then handle the click
           // Store alertId since updateAlertsDisplay will rebuild the UI and button reference will be stale
           const clickedAlertId = alertId;
-          this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true).then(() => {
-            // Handle remaining button click - just show all alerts, no need to activate
-            if (clickedAlertId === 'remaining') {
-              return;
-            }
+          this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true).then(
+            () => {
+              // Handle remaining button click - just show all alerts, no need to activate
+              if (clickedAlertId === 'remaining') {
+                return;
+              }
 
-            // For regular tag clicks, find and activate the clicked tag
-            const integrationContainer = this.getIntegrationContainer();
-            if (!integrationContainer) return;
-            const allTagButtons = qsa('.dataminr-tag[data-alert-id]', integrationContainer);
-            let tagButton = null;
-            for (let i = 0; i < allTagButtons.length; i++) {
-              const btn = allTagButtons[i];
-              if (btn.getAttribute('data-alert-id') === clickedAlertId) {
-                tagButton = btn;
-                break;
+              // For regular tag clicks, find and activate the clicked tag
+              const integrationContainer = this.getIntegrationContainer();
+              if (!integrationContainer) return;
+              const allTagButtons = qsa(
+                '.dataminr-tag[data-alert-id]',
+                integrationContainer
+              );
+              let tagButton = null;
+              for (let i = 0; i < allTagButtons.length; i++) {
+                const btn = allTagButtons[i];
+                if (btn.getAttribute('data-alert-id') === clickedAlertId) {
+                  tagButton = btn;
+                  break;
+                }
+              }
+
+              if (tagButton) {
+                this.handleAlertTagClick(clickedAlertId, tagButton);
               }
             }
-
-            if (tagButton) {
-              this.handleAlertTagClick(clickedAlertId, tagButton);
-            }
-          });
+          );
         });
       });
 
@@ -1809,7 +1949,7 @@ class DataminrIntegration {
 
     const dataminrContainer = this.getDataminrContainerForIntegration();
     this.getDataminrDetailsContainerForIntegration();
-    
+
     if (!this.userOptions || !this.userOptions.stickyAlerts) {
       // Sticky alerts disabled - remove container and stop polling
       if (dataminrContainer) {
@@ -1938,7 +2078,10 @@ class DataminrIntegration {
     while (parent && parent !== document.body) {
       const style = window.getComputedStyle(parent);
       if (
-        (style.overflow === 'auto' || style.overflow === 'scroll' || style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        (style.overflow === 'auto' ||
+          style.overflow === 'scroll' ||
+          style.overflowY === 'auto' ||
+          style.overflowY === 'scroll') &&
         parent.scrollHeight > parent.clientHeight
       ) {
         return parent;
@@ -1958,7 +2101,9 @@ class DataminrIntegration {
    */
   getScrollPosition(container) {
     if (container === window) {
-      return window.pageYOffset || window.scrollY || document.documentElement.scrollTop || 0;
+      return (
+        window.pageYOffset || window.scrollY || document.documentElement.scrollTop || 0
+      );
     }
     return container.scrollTop || 0;
   }
@@ -1985,7 +2130,9 @@ class DataminrIntegration {
    */
   showEntityDetails(entityData, triggerButton) {
     if (!entityData || !entityData.name || !triggerButton) {
-      console.error('Invalid entity data or trigger button provided to showEntityDetails');
+      console.error(
+        'Invalid entity data or trigger button provided to showEntityDetails'
+      );
       return;
     }
 
@@ -1997,7 +2144,9 @@ class DataminrIntegration {
     }
 
     // Find the details container
-    let detailsContainer = alertDetail.querySelector('.dataminr-entity-details-container');
+    let detailsContainer = alertDetail.querySelector(
+      '.dataminr-entity-details-container'
+    );
     if (!detailsContainer) {
       console.error('Could not find entity details container');
       return;
@@ -2006,7 +2155,10 @@ class DataminrIntegration {
     // Save scroll position before showing entity details
     const scrollContainer = this.getScrollableContainer(alertDetail);
     const savedScrollPosition = this.getScrollPosition(scrollContainer);
-    alertDetail.setAttribute('data-saved-scroll-position', savedScrollPosition.toString());
+    alertDetail.setAttribute(
+      'data-saved-scroll-position',
+      savedScrollPosition.toString()
+    );
     if (scrollContainer !== window) {
       alertDetail.setAttribute('data-scroll-container-id', scrollContainer.id || '');
     }
@@ -2015,20 +2167,36 @@ class DataminrIntegration {
     this.hideEntityNotifications(alertDetail);
 
     // Find and hide the alert detail content
-    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    const alertDetailContent = alertDetail.querySelector(
+      '.dataminr-alert-detail-content'
+    );
     if (alertDetailContent) {
       alertDetailContent.style.display = 'none';
     }
 
     // Get elements
     const titleElement = detailsContainer.querySelector('.dataminr-entity-details-title');
-    const typeBadge = detailsContainer.querySelector('#dataminr-entity-details-type-badge');
-    const aboutLabel = detailsContainer.querySelector('.dataminr-entity-details-about-label');
-    const aliasesList = detailsContainer.querySelector('.dataminr-entity-details-aliases-list');
-    const aliasesSection = detailsContainer.querySelector('#dataminr-entity-details-aliases-section');
-    const summaryElement = detailsContainer.querySelector('.dataminr-entity-details-summary');
-    const summarySection = detailsContainer.querySelector('#dataminr-entity-details-summary-section');
-    const linkSection = detailsContainer.querySelector('#dataminr-entity-details-link-section');
+    const typeBadge = detailsContainer.querySelector(
+      '#dataminr-entity-details-type-badge'
+    );
+    const aboutLabel = detailsContainer.querySelector(
+      '.dataminr-entity-details-about-label'
+    );
+    const aliasesList = detailsContainer.querySelector(
+      '.dataminr-entity-details-aliases-list'
+    );
+    const aliasesSection = detailsContainer.querySelector(
+      '#dataminr-entity-details-aliases-section'
+    );
+    const summaryElement = detailsContainer.querySelector(
+      '.dataminr-entity-details-summary'
+    );
+    const summarySection = detailsContainer.querySelector(
+      '#dataminr-entity-details-summary-section'
+    );
+    const linkSection = detailsContainer.querySelector(
+      '#dataminr-entity-details-link-section'
+    );
     const closeButton = detailsContainer.querySelector('.dataminr-entity-details-close');
 
     aboutLabel.style.display = 'none';
@@ -2065,7 +2233,11 @@ class DataminrIntegration {
     }
 
     // Aliases
-    if (entityData.aliases && Array.isArray(entityData.aliases) && entityData.aliases.length > 0) {
+    if (
+      entityData.aliases &&
+      Array.isArray(entityData.aliases) &&
+      entityData.aliases.length > 0
+    ) {
       if (aliasesList) {
         aliasesList.innerHTML = '';
         entityData.aliases.forEach((alias) => {
@@ -2120,7 +2292,8 @@ class DataminrIntegration {
       const alertDetailRect = alertDetail.getBoundingClientRect();
       const paddingTop = 10; // .dataminr-alert-detail has padding: 10px
       const containerRect = scrollContainer.getBoundingClientRect();
-      const relativeTop = alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
+      const relativeTop =
+        alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
       scrollContainer.scrollTop = Math.max(0, relativeTop);
     }, 0);
   }
@@ -2135,7 +2308,9 @@ class DataminrIntegration {
       return;
     }
 
-    const detailsContainer = alertDetail.querySelector('.dataminr-entity-details-container');
+    const detailsContainer = alertDetail.querySelector(
+      '.dataminr-entity-details-container'
+    );
     if (detailsContainer) {
       detailsContainer.style.display = 'none';
     }
@@ -2144,7 +2319,9 @@ class DataminrIntegration {
     this.restoreEntityNotifications(alertDetail);
 
     // Show the alert detail content
-    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    const alertDetailContent = alertDetail.querySelector(
+      '.dataminr-alert-detail-content'
+    );
     if (alertDetailContent) {
       alertDetailContent.style.display = 'block';
     }
@@ -2154,12 +2331,12 @@ class DataminrIntegration {
     if (savedScrollPosition !== null) {
       const scrollPosition = parseFloat(savedScrollPosition);
       const scrollContainerId = alertDetail.getAttribute('data-scroll-container-id');
-      
+
       let scrollContainer;
       if (scrollContainerId) {
         scrollContainer = byId(scrollContainerId);
       }
-      
+
       if (!scrollContainer) {
         scrollContainer = this.getScrollableContainer(alertDetail);
       }
@@ -2188,7 +2365,7 @@ class DataminrIntegration {
     // Find all elements with classes matching _entity-notification* pattern
     const allElements = notificationContainer.querySelectorAll('*');
     const hiddenElements = [];
-    
+
     allElements.forEach((element) => {
       // Check if element has any class starting with _entity-notification
       const classList = Array.from(element.classList);
@@ -2209,7 +2386,10 @@ class DataminrIntegration {
 
     // Store reference to hidden elements on alertDetail for restoration
     if (hiddenElements.length > 0) {
-      alertDetail.setAttribute('data-hidden-entity-notifications', hiddenElements.length.toString());
+      alertDetail.setAttribute(
+        'data-hidden-entity-notifications',
+        hiddenElements.length.toString()
+      );
       // Store elements in a way we can access them later
       if (!alertDetail._hiddenEntityNotifications) {
         alertDetail._hiddenEntityNotifications = [];
@@ -2252,7 +2432,11 @@ class DataminrIntegration {
    */
   showMediaFallback(mediaElement) {
     const container = mediaElement.parentElement;
-    if (container && container.classList && container.classList.contains('dataminr-media-container')) {
+    if (
+      container &&
+      container.classList &&
+      container.classList.contains('dataminr-media-container')
+    ) {
       const fallback = container.querySelector('.dataminr-media-fallback');
       if (fallback) {
         mediaElement.style.display = 'none';
@@ -2267,25 +2451,25 @@ class DataminrIntegration {
    */
   setupMediaErrorHandling() {
     const self = this;
-    
+
     // Function to attach error handlers to a media element (video or audio)
     const attachMediaErrorHandler = (mediaElement) => {
       if (!mediaElement || mediaElement.dataset.errorHandlerAttached) {
         return;
       }
-      
+
       mediaElement.dataset.errorHandlerAttached = 'true';
-      
+
       // Handle error event
-      mediaElement.addEventListener('error', function() {
+      mediaElement.addEventListener('error', function () {
         self.showMediaFallback(mediaElement);
       });
-      
+
       // Handle loadstart/loadeddata to detect CORS/403 errors
       // If media doesn't load within a reasonable time, show fallback
       let loadTimeout = null;
       let hasLoadedData = false;
-      
+
       const checkLoadStatus = () => {
         // Both video and audio have readyState property
         if (!hasLoadedData && mediaElement.readyState === 0) {
@@ -2297,7 +2481,7 @@ class DataminrIntegration {
           }, 3000); // Wait 3 seconds for media to start loading
         }
       };
-      
+
       mediaElement.addEventListener('loadstart', () => {
         hasLoadedData = false;
         if (loadTimeout) {
@@ -2305,14 +2489,14 @@ class DataminrIntegration {
         }
         checkLoadStatus();
       });
-      
+
       mediaElement.addEventListener('loadeddata', () => {
         hasLoadedData = true;
         if (loadTimeout) {
           clearTimeout(loadTimeout);
         }
       });
-      
+
       // Video-specific: stalled event
       if (mediaElement.tagName === 'VIDEO') {
         mediaElement.addEventListener('stalled', () => {
@@ -2322,12 +2506,12 @@ class DataminrIntegration {
           }
         });
       }
-      
+
       // Check immediately if media is already in error state (video only)
       if (mediaElement.error && mediaElement.error.code !== 0) {
         self.showMediaFallback(mediaElement);
       }
-      
+
       // Also check after a short delay to catch CORS errors that don't fire error events immediately
       setTimeout(() => {
         if (mediaElement.readyState === 0 && !hasLoadedData) {
@@ -2336,15 +2520,16 @@ class DataminrIntegration {
         }
       }, 2000);
     };
-    
+
     // Set up MutationObserver to catch dynamically added media elements
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) { // Element node
+          if (node.nodeType === 1) {
+            // Element node
             // Check if the added node is a media element or contains media elements
             let mediaElements = [];
-            
+
             if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') {
               if (node.classList && node.classList.contains('dataminr-media-player')) {
                 mediaElements = [node];
@@ -2355,9 +2540,12 @@ class DataminrIntegration {
               const audios = node.querySelectorAll('audio.dataminr-media-player');
               mediaElements = Array.from(videos).concat(Array.from(audios));
             }
-            
+
             mediaElements.forEach((mediaElement) => {
-              if (mediaElement.classList && mediaElement.classList.contains('dataminr-media-player')) {
+              if (
+                mediaElement.classList &&
+                mediaElement.classList.contains('dataminr-media-player')
+              ) {
                 attachMediaErrorHandler(mediaElement);
               }
             });
@@ -2365,13 +2553,13 @@ class DataminrIntegration {
         });
       });
     });
-    
+
     // Observe the document body for new media elements
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
-    
+
     // Also attach handlers to any existing media elements
     const existingVideos = document.querySelectorAll('video.dataminr-media-player');
     const existingAudios = document.querySelectorAll('audio.dataminr-media-player');
@@ -2403,6 +2591,37 @@ class DataminrIntegration {
         e.stopPropagation();
         const textToCopy = button.getAttribute('data-intel-agents-text') || '';
         this.copyToClipboard(textToCopy, 'Intel agents copied to clipboard');
+        return;
+      }
+
+      // Handle metadata search button
+      if (e.target.closest('.dataminr-alert-metadata-search-btn')) {
+        const button = e.target.closest('.dataminr-alert-metadata-search-btn');
+        e.stopPropagation();
+        e.preventDefault();
+
+        // Find the metadata container
+        const metadataContainer = button.closest('.dataminr-alert-metadata');
+        if (!metadataContainer) {
+          return;
+        }
+
+        // Collect all metadata values
+        const metadataValues = [];
+        const valueSpans = metadataContainer.querySelectorAll(
+          '.dataminr-alert-metadata-value'
+        );
+        valueSpans.forEach(function (span) {
+          const text = span.textContent.trim();
+          if (text) {
+            metadataValues.push(text);
+          }
+        });
+
+        // Submit each value individually
+        if (metadataValues.length > 0) {
+          this.submitMetadataSearchesSequentially(metadataValues);
+        }
         return;
       }
 
@@ -2442,7 +2661,10 @@ class DataminrIntegration {
 
         // Parse aliases from comma-separated string
         const entityAliases = entityAliasesStr
-          ? entityAliasesStr.split(',').map((alias) => alias.trim()).filter((alias) => alias)
+          ? entityAliasesStr
+              .split(',')
+              .map((alias) => alias.trim())
+              .filter((alias) => alias)
           : [];
 
         if (entityName) {
@@ -2450,11 +2672,15 @@ class DataminrIntegration {
           const alertDetail = entityTrigger.closest('.dataminr-alert-detail');
           if (alertDetail) {
             // Hide any currently visible entity details
-            const existingDetails = alertDetail.querySelector('.dataminr-entity-details-container');
+            const existingDetails = alertDetail.querySelector(
+              '.dataminr-entity-details-container'
+            );
             if (existingDetails && existingDetails.style.display !== 'none') {
               this.hideEntityDetails(alertDetail);
               // If clicking the same entity, just hide it (toggle behavior)
-              const currentTitle = existingDetails.querySelector('.dataminr-entity-details-title');
+              const currentTitle = existingDetails.querySelector(
+                '.dataminr-entity-details-title'
+              );
               if (currentTitle && currentTitle.textContent === entityName) {
                 return;
               }
@@ -2580,6 +2806,20 @@ function initDataminr(integration, userConfig, userOptions) {
       };
       applyScrollbarClass();
     }, integrationName);
+    // Watch the currentAlertIds map for changes
+    window[integrationName].watchTrackedMap(
+      window.PolarityUtils.getNotificationList().map,
+      ({ op, before, after }) => {
+        if (op === 'set' && after > 0) {
+          // Close the alert detail if it is open
+          window[integrationName].hideAllDetails();
+          window[integrationName].deactivateAllTagButtons();
+        }
+        console.debug(
+          `Notification - Operation: ${op}, Count Before: ${before}, Count After: ${after}`
+        );
+      }
+    );
   }
 }
 

@@ -594,6 +594,50 @@ img {
   }
 }
 
+.dataminr-alert-metadata-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.dataminr-alert-metadata-header-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: @color-text-primary;
+}
+
+.dataminr-alert-metadata-search-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: @color-primary;
+  transition: color 0.2s ease, opacity 0.2s ease;
+  opacity: 0.7;
+  margin-bottom: -10px;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: 2px solid @color-primary;
+    outline-offset: 2px;
+    opacity: 1;
+  }
+
+  svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+  }
+}
+
 .dataminr-alert-metadata-content {
   background-color: @color-bg-metadata;
   padding: 10px;

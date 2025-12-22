@@ -1118,6 +1118,34 @@ class DataminrIntegration {
    * @returns {number} returns.alert - Count of Alert alerts
    * @returns {number} returns.total - Total count of all alerts
    */
+  /**
+   * Check if an alert type should be included based on alertTypesToWatch configuration
+   * @private
+   * @param {string} alertType - Alert type to check ('Flash', 'Urgent', 'Alert')
+   * @returns {boolean} True if alert type should be included
+   */
+  shouldIncludeAlertType(alertType) {
+    // Get configured alert types to watch (default to all if not configured)
+    const alertTypesToWatch = (this.userOptions && 
+                               this.userOptions.setAlertTypesToWatch && 
+                               this.userOptions.setAlertTypesToWatch.length > 0)
+      ? this.userOptions.setAlertTypesToWatch
+      : ['flash', 'urgent', 'alert'];
+    
+    // Normalize to lowercase for comparison
+    const normalizedTypes = alertTypesToWatch.map((type) => {
+      // If it's an object with a value property, use that
+      if (type && typeof type === 'object' && type.value) {
+        return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
+      }
+      // Otherwise treat as string
+      return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
+    });
+    
+    const normalizedAlertType = alertType ? alertType.toLowerCase() : 'alert';
+    return normalizedTypes.indexOf(normalizedAlertType) !== -1;
+  }
+
   calculateAlertCountsByType() {
     if (!this.currentAlertIds || this.currentAlertIds.size === 0) {
       return { flash: 0, urgent: 0, alert: 0, total: 0 };
@@ -1127,6 +1155,12 @@ class DataminrIntegration {
 
     this.currentAlertIds.forEach((alert) => {
       const alertType = this.getAlertType(alert);
+      
+      // Only count alerts that match alertTypesToWatch configuration
+      if (!this.shouldIncludeAlertType(alertType)) {
+        return;
+      }
+      
       const normalizedType = alertType.toLowerCase();
 
       if (normalizedType === 'flash') {
@@ -1385,7 +1419,13 @@ class DataminrIntegration {
     // Convert Map to array for iteration
     let alertsArray = Array.from(alertsMap.values());
 
-    // Apply filter if one is active
+    // Filter by alertTypesToWatch configuration first
+    alertsArray = alertsArray.filter((alert) => {
+      const alertType = this.getAlertType(alert);
+      return this.shouldIncludeAlertType(alertType);
+    });
+
+    // Apply user filter if one is active (Flash/Urgent/Alert icon click)
     if (this.currentFilter) {
       alertsArray = alertsArray.filter((alert) => {
         const alertType = this.getAlertType(alert);
@@ -1766,29 +1806,37 @@ class DataminrIntegration {
 
     const dataminrContainer = this.getDataminrContainerForIntegration();
     this.getDataminrDetailsContainerForIntegration();
-    if (!dataminrContainer && this.userOptions && this.userOptions.stickyAlerts) {
+    
+    if (!this.userOptions || !this.userOptions.stickyAlerts) {
+      // Sticky alerts disabled - remove container and stop polling
+      if (dataminrContainer) {
+        dataminrContainer.remove();
+      }
+      this.stopPolling();
+      return;
+    }
+
+    // Sticky alerts enabled - initialize or use existing container
+    if (!dataminrContainer) {
+      // Create new container
       this.currentUser = window.PolarityUtils.getCurrentUser();
       await this.initPolarityPin();
-
-      // Set up event delegation for copy buttons (works with dynamically created content)
-      this.setupCopyButtonDelegation();
-      this.setupMediaErrorHandling();
-
-      // Wait a bit for the UI to be ready, then start polling
-      setTimeout(() => {
-        this.startPolling();
-      }, 1000);
 
       // Look up alert from URL parameter if present (fire and forget)
       this.lookupAlertFromUrl().catch(function (error) {
         console.error('Error in lookupAlertFromUrl:', error);
       });
-    } else if (this.userOptions && !this.userOptions.stickyAlerts) {
-      if (dataminrContainer) {
-        dataminrContainer.remove();
-      }
-      this.stopPolling();
     }
+
+    // Common initialization for both new and existing containers
+    this.updateAlertCount(0);
+    this.setupCopyButtonDelegation();
+    this.setupMediaErrorHandling();
+
+    // Start polling after a short delay to ensure UI is ready
+    setTimeout(() => {
+      this.startPolling();
+    }, 1000);
   }
 
   /**

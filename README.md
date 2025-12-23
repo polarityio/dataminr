@@ -35,6 +35,12 @@ Filter the lists to watch for alerts
 - User Editable: Yes
 - Multiple Selection: Yes
 
+### Filter Alert Types
+Filter the type of alert
+- Default: [`flash`, `urgent`, `alert`]
+- User Editable: Yes
+- Multiple Selection: Yes
+
 ### Poll Interval
 The interval in seconds for the server to poll for new Alerts
 - Default: `60` seconds

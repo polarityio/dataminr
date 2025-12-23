@@ -401,6 +401,7 @@ class DataminrIntegration {
     this.lastQueryTimestamp = null; // ISO timestamp of last query
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
     this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
+    this.defaultAlertTypesToWatch = ['flash', 'urgent', 'alert'];
 
     // Initialize the application
     this.init();
@@ -1254,7 +1255,7 @@ class DataminrIntegration {
       this.userOptions.setAlertTypesToWatch &&
       this.userOptions.setAlertTypesToWatch.length > 0
         ? this.userOptions.setAlertTypesToWatch
-        : ['flash', 'urgent', 'alert'];
+        : this.defaultAlertTypesToWatch;
 
     // Normalize to lowercase for comparison
     const normalizedTypes = alertTypesToWatch.map((type) => {
@@ -1316,7 +1317,7 @@ class DataminrIntegration {
       this.userOptions.setAlertTypesToWatch &&
       this.userOptions.setAlertTypesToWatch.length > 0
         ? this.userOptions.setAlertTypesToWatch
-        : ['flash', 'urgent', 'alert'];
+        : this.defaultAlertTypesToWatch;
 
     // Normalize to lowercase for comparison
     // Handle both string arrays and object arrays with {value, display} structure

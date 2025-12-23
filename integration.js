@@ -26,6 +26,7 @@ let pollingInterval = null;
 let Logger = null;
 let pollingInitialized = false;
 const routePrefix = 'pulse';
+const defaultAlertTypesToWatch = ['flash', 'urgent', 'alert'];
 
 /**
  * Initialize polling for alerts
@@ -193,7 +194,7 @@ const onMessage = async (payload, options, cb) => {
         const alertTypesToWatch = (options.setAlertTypesToWatch && 
                                    options.setAlertTypesToWatch.length > 0)
           ? options.setAlertTypesToWatch
-          : ['flash', 'urgent', 'alert'];
+          : defaultAlertTypesToWatch;
         // Normalize to lowercase for comparison
         // Handle both string arrays and object arrays with {value, display} structure
         const normalizedAlertTypesToWatch = alertTypesToWatch.map((type) => {

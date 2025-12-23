@@ -1,5 +1,12 @@
 {{! Alert Template used for both Search and Notification Details Panels }}
 <div class="dataminr-alert-search-details dm-jewel-theme-integration">
+  {{#if details.limitedMessage}}
+    <div class="dataminr-trial-message" style="padding: 16px; background-color: rgba(255, 255, 255, 0.05); border-radius: 4px; margin-bottom: 16px;">
+      <p style="margin: 0; color: #F5F6F9; font-size: 14px; line-height: 1.5;">
+        {{details.limitedMessage.text}}<a href="mailto:{{details.limitedMessage.email}}" class="p-link">{{details.limitedMessage.email}}</a>
+      </p>
+    </div>
+  {{/if}}
   {{#if (eq details.alerts.length 10)}}
     <div>
       <a href="https://app.dataminr.com/app/dashboard/search" class="p-link">

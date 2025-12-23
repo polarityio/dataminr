@@ -73,17 +73,33 @@ const setLogger = (logger) => {
 };
 
 /**
+ * Clear cached token for the given options
+ * @param {Object} options - Configuration options
+ * @returns {void}
+ */
+const clearToken = (options) => {
+  const tokenCacheKey = options.clientId + options.clientSecret;
+  tokenCache.del(tokenCacheKey);
+};
+
+/**
  * Get authentication token from Dataminr API (with caching)
  * @param {Object} options - Configuration options
  * @param {string} options.clientId - Client ID for authentication
  * @param {string} options.clientSecret - Client secret for authentication
  * @param {string} options.url - Base URL for the API
+ * @param {boolean} [forceRefresh=false] - If true, bypass cache and get a new token
  * @returns {Promise<string>} Resolves with the authentication token
  */
-const getToken = async (options) => {
+const getToken = async (options, forceRefresh = false) => {
   const tokenCacheKey = options.clientId + options.clientSecret;
-  const cachedToken = tokenCache.get(tokenCacheKey);
-  if (cachedToken) return cachedToken;
+  
+  if (forceRefresh) {
+    tokenCache.del(tokenCacheKey);
+  } else {
+    const cachedToken = tokenCache.get(tokenCacheKey);
+    if (cachedToken) return cachedToken;
+  }
 
   // Set userOptions before making request
   request.userOptions = options;
@@ -141,7 +157,8 @@ const getToken = async (options) => {
  */
 const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestOptions }) => {
   const Logger = getLogger();
-  const token = await getToken(options);
+  let token = await getToken(options);
+  let tokenRefreshed = false;
 
   // Set userOptions before making request
   request.userOptions = options;
@@ -165,8 +182,40 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
     } catch (error) {
       lastError = error;
 
-      // Check if it's a 429 rate limit error
+      // Check if it's a 401 authentication error
       const errorStatus = error.status || error.statusCode || (error.meta && error.meta.statusCode);
+      const isUnauthorizedError =
+        (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
+        (errorStatus === '401' || errorStatus === 401);
+
+      // If we get a 401 and haven't refreshed the token yet, try to get a new token and retry once
+      if (isUnauthorizedError && !tokenRefreshed) {
+        Logger.warn(
+          { route, errorStatus },
+          'Received 401 unauthorized error, attempting to refresh token'
+        );
+
+        try {
+          // Clear the cached token and get a new one
+          clearToken(options);
+          token = await getToken(options, true);
+          tokenRefreshed = true;
+
+          // Retry the request with the new token
+          attemptNumber++;
+          continue;
+        } catch (tokenError) {
+          // If getting a new token fails (e.g., invalid credentials), throw immediately
+          // Don't retry as this indicates a configuration issue, not an expired token
+          Logger.error(
+            { route, tokenError },
+            'Failed to refresh token, credentials may be invalid'
+          );
+          throw tokenError;
+        }
+      }
+
+      // Check if it's a 429 rate limit error
       const isRateLimitError =
         (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
         (errorStatus === '429' || errorStatus === 429 || String(error.message || error.detail || '').includes('429'));

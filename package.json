@@ -1,6 +1,6 @@
 {
   "name": "dataminr-pulse",
-  "version": "3.1.9",
+  "version": "3.1.10",
   "main": "./integration.js",
   "private": true,
   "dependencies": {
@@ -11,6 +11,6 @@
     "polarity-integration-utils": "^3.1.4"
   },
   "overrides": {
-    "qs": ">=6.14.1"
+    "qs": "^6.14.1"
   }
 }

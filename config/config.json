@@ -3,6 +3,27 @@
   "name": "Dataminr Pulse",
   "acronym": "DMP",
   "description": "Search Dataminr Pulse by all entities to get related Alerts. Pin Dataminr Pulse incoming alerts to the top of Polarity for instant notification.",
+  "dataTypes": [
+    "domain",
+    "IPv4",
+    "IPv6",
+    "IPv4CIDR",
+    "email",
+    "MD5",
+    "SHA1",
+    "SHA256",
+    "cve",
+    "url",
+    {
+      "type": "custom",
+      "name": "All Text",
+      "description": "Matches on all possible text",
+      "editable": false,
+      "enabled": false,
+      "key": "allText",
+      "regex": "\\S[\\s\\S]{2,256}\\S"
+    }
+  ],
   "entityTypes": [
     "domain",
     "IPv4",

@@ -121,6 +121,7 @@ class PolarityUtils {
     this._scrollbarModeCallbacks = new Map(); // Map name -> callback
     this._scrollbarModeObserverInitialized = false;
     this._scrollbarModeLast = null; // Last scrollbar mode state
+    this._scrollbarModeElement = null; // Element used for scrollbar detection
     this._settingsChangeObserverInitialized = false;
     this._enterSettings = false;
   }
@@ -269,12 +270,38 @@ class PolarityUtils {
       return;
     }
 
-    const el = document.createElement('div');
-    el.style.cssText =
+    this._scrollbarModeElement = document.createElement('div');
+    this._scrollbarModeElement.style.cssText =
       'width:100px;height:100px;overflow:scroll;position:absolute;top:-9999px;';
-    document.body.appendChild(el);
+    document.body.appendChild(this._scrollbarModeElement);
 
     const check = () => {
+      const oldValue = this._scrollbarModeLast;
+      const newValue = this.getOverlayScrollbarState();
+      if (oldValue !== newValue) {
+        // Call all registered callbacks
+        this._scrollbarModeCallbacks.forEach((cb) => cb(newValue));
+      }
+    };
+
+    new ResizeObserver(check).observe(this._scrollbarModeElement);
+    ['resize', 'orientationchange', 'visibilitychange', 'pageshow'].forEach((ev) =>
+      window.addEventListener(ev, check, { passive: true })
+    );
+
+    this._scrollbarModeObserverInitialized = true;
+    check(); // initial detection
+  }
+
+  /**
+   * Check if overlay scrollbars are enabled
+   * @returns {boolean} True if overlay scrollbars are enabled, false otherwise
+   */
+  getOverlayScrollbarState() {
+    // If observer is initialized, use the stored element (which is already in the DOM)
+    if (this._scrollbarModeObserverInitialized && this._scrollbarModeElement) {
+      const el = this._scrollbarModeElement;
+
       // Force layout flush – this makes offsetWidth/clientWidth update correctly
       el.style.display = 'none';
       el.offsetHeight; // <-- force reflow (read a layout property)
@@ -283,18 +310,31 @@ class PolarityUtils {
       const overlay = el.offsetWidth === el.clientWidth;
       if (overlay !== this._scrollbarModeLast) {
         this._scrollbarModeLast = overlay;
-        // Call all registered callbacks
-        this._scrollbarModeCallbacks.forEach((cb) => cb(overlay));
       }
-    };
 
-    new ResizeObserver(check).observe(el);
-    ['resize', 'orientationchange', 'visibilitychange', 'pageshow'].forEach((ev) =>
-      window.addEventListener(ev, check, { passive: true })
-    );
+      return overlay;
+    }
 
-    this._scrollbarModeObserverInitialized = true;
-    check(); // initial detection
+    // If observer hasn't been initialized, perform a one-time check with temporary element
+    const tempEl = document.createElement('div');
+    tempEl.style.cssText =
+      'width:100px;height:100px;overflow:scroll;position:absolute;top:-9999px;';
+    document.body.appendChild(tempEl);
+
+    // Force layout flush – this makes offsetWidth/clientWidth update correctly
+    tempEl.style.display = 'none';
+    tempEl.offsetHeight; // <-- force reflow (read a layout property)
+    tempEl.style.display = '';
+
+    const overlay = tempEl.offsetWidth === tempEl.clientWidth;
+    document.body.removeChild(tempEl);
+
+    // Cache the result if not already cached
+    if (this._scrollbarModeLast === null) {
+      this._scrollbarModeLast = overlay;
+    }
+
+    return overlay;
   }
 
   /**

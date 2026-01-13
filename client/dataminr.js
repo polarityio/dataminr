@@ -857,7 +857,7 @@ class DataminrIntegration {
    * @private
    */
   hideAllDetails() {
-    const allDetails = qsa('.dataminr-alert-detail');
+    const allDetails = qsa('#dataminr-details-container .dataminr-alert-detail');
     allDetails.forEach((detail) => {
       detail.style.display = 'none';
       detail.classList.remove('visible');

@@ -952,7 +952,7 @@ class DataminrIntegration {
         );
         if (!detailsContainer) {
           detailsContainer = document.createElement('div');
-          detailsContainer.className = dataminrDetailsClass;
+          detailsContainer.className = this.buildClassName('dataminr-alert-details');
           dataminrDetailsContainer.appendChild(detailsContainer);
         }
 

@@ -418,7 +418,8 @@ img {
    Alert Details Styles
    ============================================ */
 
-.dataminr-alert-details {
+.dataminr-alert-details,
+.dataminr-entity-details {
   padding: 0 14px 8px 0;
   margin: 0 -4px 0 4px;
 
@@ -427,7 +428,8 @@ img {
   }
 }
 
-.dm-jewel-theme.dataminr-alert-details {
+.dm-jewel-theme.dataminr-alert-details,
+.dm-jewel-theme.dataminr-entity-details {
   padding: 0 0 8px 0px;
   margin: 0;
 
@@ -437,17 +439,21 @@ img {
   }
 }
 
-.polarity-x-client.dataminr-alert-details {
+.polarity-x-client.dataminr-alert-details,
+.polarity-x-client.dataminr-entity-details {
   margin: 0 -2px 0 0;
   padding: 0 5px 5px;
 }
 
-.dm-jewel-theme.polarity-x-client.dataminr-alert-details {
+.dm-jewel-theme.polarity-x-client.dataminr-alert-details,
+.dm-jewel-theme.polarity-x-client.dataminr-entity-details {
   padding-right: 0;
   margin: 0 -5px 0 0;
 }
 
-.dataminr-alert-detail {
+.dataminr-alert-detail,
+.dataminr-entity-detail {
+  position: relative;
   display: none;
   padding: 10px;
   margin-top: 7px;
@@ -457,11 +463,13 @@ img {
   color: @color-text-primary;
 }
 
-.polarity-x-client .dataminr-alert-detail {
+.polarity-x-client .dataminr-alert-detail,
+.polarity-x-client .dataminr-entity-detail {
   margin-top: 3px;
 }
 
-.dataminr-alert-search-details .dataminr-alert-detail {
+.dataminr-alert-search-details .dataminr-alert-detail,
+.dataminr-alert-search-details .dataminr-entity-detail {
   margin: 10px 0;
   display: block;
 }
@@ -834,11 +842,6 @@ img {
 /* ============================================
    Entity Details Container Styles
    ============================================ */
-
-.dataminr-alert-detail {
-  position: relative;
-}
-
 .dataminr-entity-details-container {
   position: absolute;
   top: 0;

@@ -2184,6 +2184,9 @@ class DataminrIntegration {
       return;
     }
 
+    // Determine if Alert is a Pinned Pulse.
+    const isPinnedAlert = alertDetail.hasAttribute('data-alert-id');
+
     // Find the details container
     let detailsContainer = alertDetail.querySelector(
       '.dataminr-entity-details-container'
@@ -2211,7 +2214,10 @@ class DataminrIntegration {
     const alertDetailContent = alertDetail.querySelector(
       '.dataminr-alert-detail-content'
     );
-    if (alertDetailContent) {
+
+    // Only hide the alertDetailContent for pinned alerts as non-pinned alerts
+    // are hidden when we hide all entity notifications.
+    if (isPinnedAlert && alertDetailContent) {
       alertDetailContent.style.display = 'none';
     }
 
@@ -2238,7 +2244,6 @@ class DataminrIntegration {
     const linkSection = detailsContainer.querySelector(
       '#dataminr-entity-details-link-section'
     );
-    const closeButton = detailsContainer.querySelector('.dataminr-entity-details-close');
 
     aboutLabel.style.display = 'none';
     // Populate with entity data
@@ -2314,7 +2319,39 @@ class DataminrIntegration {
       }
     }
 
-    // Set up close button handler if not already set
+    let closeButton;
+    let detailsContainerClone;
+    // The alert is not pinned which means it is in the wrong location to be viewable
+    // We need to "portal" the element to the correct location
+    if (!isPinnedAlert) {
+      // Get or create the details container
+      const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+
+      let entityDetailsTargetContainer = dataminrDetailsContainer.querySelector(
+        '.dataminr-entity-details'
+      );
+
+      if (!entityDetailsTargetContainer) {
+        entityDetailsTargetContainer = document.createElement('div');
+        entityDetailsTargetContainer.className = this.buildClassName(
+          'dataminr-entity-details'
+        );
+        dataminrDetailsContainer.appendChild(entityDetailsTargetContainer);
+      }
+
+      if (detailsContainer && entityDetailsTargetContainer) {
+        entityDetailsTargetContainer.innerHTML = '';
+        detailsContainerClone = detailsContainer.cloneNode(true);
+        entityDetailsTargetContainer.appendChild(detailsContainerClone);
+        closeButton = detailsContainerClone.querySelector(
+          '.dataminr-entity-details-close'
+        );
+      }
+    } else {
+      closeButton = detailsContainer.querySelector('.dataminr-entity-details-close');
+    }
+
+    // Set up close button handler (after potential cloning) if not already set
     if (closeButton && !closeButton.hasAttribute('data-handler-attached')) {
       closeButton.setAttribute('data-handler-attached', 'true');
       closeButton.addEventListener('click', () => {
@@ -2322,8 +2359,13 @@ class DataminrIntegration {
       });
     }
 
-    // Show the details container
-    detailsContainer.style.display = 'block';
+    // Make the details container visible after any potential portaling of
+    // non-pinned alerts
+    if (isPinnedAlert) {
+      detailsContainer.style.display = 'block';
+    } else if (detailsContainerClone) {
+      detailsContainerClone.style.display = 'block';
+    }
 
     // Scroll to the top when opening entity details
     // Use setTimeout to ensure the display change has taken effect
@@ -2349,22 +2391,40 @@ class DataminrIntegration {
       return;
     }
 
-    const detailsContainer = alertDetail.querySelector(
-      '.dataminr-entity-details-container'
-    );
-    if (detailsContainer) {
-      detailsContainer.style.display = 'none';
-    }
+    const isPinnedAlert = alertDetail.hasAttribute('data-alert-id');
 
-    // Restore entity notification classes in notification overlay scroll container
-    this.restoreEntityNotifications(alertDetail);
+    if (isPinnedAlert) {
+      const detailsContainer = alertDetail.querySelector(
+        '.dataminr-entity-details-container'
+      );
+      if (detailsContainer) {
+        detailsContainer.style.display = 'none';
+      }
 
-    // Show the alert detail content
-    const alertDetailContent = alertDetail.querySelector(
-      '.dataminr-alert-detail-content'
-    );
-    if (alertDetailContent) {
-      alertDetailContent.style.display = 'block';
+      // Restore entity notification classes in notification overlay scroll container
+      this.restoreEntityNotifications(alertDetail);
+
+      // Show the alert detail content
+      const alertDetailContent = alertDetail.querySelector(
+        '.dataminr-alert-detail-content'
+      );
+      if (alertDetailContent) {
+        alertDetailContent.style.display = 'block';
+      }
+    } else {
+      // Get or create the details container
+      const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+
+      let entityDetailsTargetContainer = dataminrDetailsContainer.querySelector(
+        '.dataminr-entity-details'
+      );
+
+      if (entityDetailsTargetContainer) {
+        entityDetailsTargetContainer.innerHTML = '';
+      }
+
+      // Restore entity notification classes in notification overlay scroll container
+      this.restoreEntityNotifications(alertDetail);
     }
 
     // Restore scroll position

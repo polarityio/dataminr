@@ -481,6 +481,11 @@ class DataminrIntegration {
       className += ' dm-jewel-theme';
     }
 
+    const overlay = window.PolarityUtils.getOverlayScrollbarState();
+    if (overlay) {
+      className += ' overlay-scrollbars';
+    }
+
     return className;
   }
 
@@ -2324,20 +2329,26 @@ class DataminrIntegration {
     // The alert is not pinned which means it is in the wrong location to be viewable
     // We need to "portal" the element to the correct location
     if (!isPinnedAlert) {
+      this.deactivateAllTagButtons();
+      this.hideAllDetails();
+
       // Get or create the details container
       const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
 
-      let entityDetailsTargetContainer = dataminrDetailsContainer.querySelector(
+      let entityDetailsParent = dataminrDetailsContainer.querySelector(
         '.dataminr-entity-details'
       );
 
-      if (!entityDetailsTargetContainer) {
-        entityDetailsTargetContainer = document.createElement('div');
-        entityDetailsTargetContainer.className = this.buildClassName(
-          'dataminr-entity-details'
-        );
-        dataminrDetailsContainer.appendChild(entityDetailsTargetContainer);
+      if (!entityDetailsParent) {
+        entityDetailsParent = Object.assign(document.createElement('div'), {
+          className: this.buildClassName('dataminr-entity-details')
+        });
       }
+      const entityDetailsTargetContainer = Object.assign(document.createElement('div'), {
+        className: 'dataminr-entity-detail', style: 'display: block; margin-top: 0;'
+      });
+      entityDetailsParent.appendChild(entityDetailsTargetContainer );
+      dataminrDetailsContainer.appendChild(entityDetailsParent);
 
       if (detailsContainer && entityDetailsTargetContainer) {
         entityDetailsTargetContainer.innerHTML = '';
@@ -2367,18 +2378,6 @@ class DataminrIntegration {
       detailsContainerClone.style.display = 'block';
     }
 
-    // Scroll to the top when opening entity details
-    // Use setTimeout to ensure the display change has taken effect
-    setTimeout(() => {
-      // Scroll the scrollable container so entity details container is at the top
-      const scrollContainer = this.getScrollableContainer(alertDetail);
-      const alertDetailRect = alertDetail.getBoundingClientRect();
-      const paddingTop = 10; // .dataminr-alert-detail has padding: 10px
-      const containerRect = scrollContainer.getBoundingClientRect();
-      const relativeTop =
-        alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
-      scrollContainer.scrollTop = Math.max(0, relativeTop);
-    }, 0);
   }
 
   /**

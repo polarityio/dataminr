@@ -2393,6 +2393,115 @@ class DataminrIntegration {
   }
 
   /**
+   * Show metadata details (Key Points) in overlay view
+   * @private
+   * @param {Element} triggerElement - The element that triggered the display
+   */
+  showMetadataDetails(triggerElement) {
+    if (!triggerElement) {
+      console.error('No trigger element provided to showMetadataDetails');
+      return;
+    }
+
+    // Find the alert detail container
+    const alertDetail = triggerElement.closest('.dataminr-alert-detail');
+    if (!alertDetail) {
+      console.error('Could not find alert detail container');
+      return;
+    }
+
+    // Find the metadata details overlay
+    const detailsOverlay = alertDetail.querySelector('.dataminr-metadata-details-overlay');
+    if (!detailsOverlay) {
+      console.error('Could not find metadata details overlay');
+      return;
+    }
+
+    // Save scroll position before showing metadata details
+    const scrollContainer = this.getScrollableContainer(alertDetail);
+    const savedScrollPosition = this.getScrollPosition(scrollContainer);
+    alertDetail.setAttribute(
+      'data-saved-metadata-scroll-position',
+      savedScrollPosition.toString()
+    );
+    if (scrollContainer !== window) {
+      alertDetail.setAttribute('data-metadata-scroll-container-id', scrollContainer.id || '');
+    }
+
+    // Hide entity notification classes in notification overlay scroll container
+    this.hideEntityNotifications(alertDetail);
+
+    // Find and hide the alert detail content
+    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    if (alertDetailContent) {
+      alertDetailContent.style.display = 'none';
+    }
+
+    // Show the metadata details overlay
+    detailsOverlay.style.display = 'block';
+
+    // Scroll to the top when opening metadata details
+    setTimeout(() => {
+      const scrollContainer = this.getScrollableContainer(alertDetail);
+      const alertDetailRect = alertDetail.getBoundingClientRect();
+      const paddingTop = 10;
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const relativeTop =
+        alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
+      scrollContainer.scrollTop = Math.max(0, relativeTop);
+    }, 0);
+  }
+
+  /**
+   * Hide metadata details overlay
+   * @private
+   * @param {Element} alertDetail - The alert detail element
+   */
+  hideMetadataDetails(alertDetail) {
+    if (!alertDetail) {
+      return;
+    }
+
+    const detailsOverlay = alertDetail.querySelector('.dataminr-metadata-details-overlay');
+    if (detailsOverlay) {
+      detailsOverlay.style.display = 'none';
+    }
+
+    // Restore entity notification classes in notification overlay scroll container
+    this.restoreEntityNotifications(alertDetail);
+
+    // Show the alert detail content
+    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
+    if (alertDetailContent) {
+      alertDetailContent.style.display = 'block';
+    }
+
+    // Restore scroll position
+    const savedScrollPosition = alertDetail.getAttribute('data-saved-metadata-scroll-position');
+    if (savedScrollPosition !== null) {
+      const scrollPosition = parseFloat(savedScrollPosition);
+      const scrollContainerId = alertDetail.getAttribute('data-metadata-scroll-container-id');
+
+      let scrollContainer;
+      if (scrollContainerId) {
+        scrollContainer = byId(scrollContainerId);
+      }
+
+      if (!scrollContainer) {
+        scrollContainer = this.getScrollableContainer(alertDetail);
+      }
+
+      // Use requestAnimationFrame to ensure DOM has updated before scrolling
+      requestAnimationFrame(() => {
+        this.setScrollPosition(scrollContainer, scrollPosition);
+        // Clean up the saved scroll position attributes
+        alertDetail.removeAttribute('data-saved-metadata-scroll-position');
+        alertDetail.removeAttribute('data-metadata-scroll-container-id');
+      });
+    }
+  }
+
+  /**
    * Hide entity notification classes in notification overlay scroll container
    * @private
    * @param {Element} alertDetail - The alert detail element
@@ -2538,17 +2647,35 @@ class DataminrIntegration {
         }
       });
 
-      // Video-specific: stalled event
-      if (mediaElement.tagName === 'VIDEO') {
-        mediaElement.addEventListener('stalled', () => {
-          // Media stalled, might be blocked
-          if (!hasLoadedData) {
-            self.showMediaFallback(mediaElement);
-          }
-        });
-      }
+      // Handle stalled event (works for both video and audio)
+      mediaElement.addEventListener('stalled', () => {
+        // Media stalled, might be blocked by CORS
+        if (!hasLoadedData) {
+          self.showMediaFallback(mediaElement);
+        }
+      });
 
-      // Check immediately if media is already in error state (video only)
+      // Handle abort event which can fire on CORS errors
+      mediaElement.addEventListener('abort', () => {
+        if (!hasLoadedData) {
+          self.showMediaFallback(mediaElement);
+        }
+      });
+
+      // Handle suspend event - can indicate CORS blocking
+      mediaElement.addEventListener('suspend', () => {
+        // Only show fallback if we haven't loaded any data and media is in early loading state
+        if (!hasLoadedData && mediaElement.readyState < 2) {
+          // Set a short timeout to allow normal suspend events during buffering
+          setTimeout(() => {
+            if (!hasLoadedData && mediaElement.readyState < 2) {
+              self.showMediaFallback(mediaElement);
+            }
+          }, 1500);
+        }
+      });
+
+      // Check immediately if media is already in error state
       if (mediaElement.error && mediaElement.error.code !== 0) {
         self.showMediaFallback(mediaElement);
       }
@@ -2662,6 +2789,29 @@ class DataminrIntegration {
         // Submit each value individually
         if (metadataValues.length > 0) {
           this.submitMetadataSearchesSequentially(metadataValues);
+        }
+        return;
+      }
+
+      // Handle metadata details trigger (View additional details for Key Points)
+      if (e.target.closest('.dataminr-vulnerability-view-details-trigger')) {
+        const triggerElement = e.target.closest('.dataminr-vulnerability-view-details-trigger');
+        e.stopPropagation();
+        e.preventDefault();
+
+        this.showMetadataDetails(triggerElement);
+        return;
+      }
+
+      // Handle metadata details close button
+      if (e.target.closest('.dataminr-metadata-details-overlay-close')) {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const closeButton = e.target.closest('.dataminr-metadata-details-overlay-close');
+        const alertDetail = closeButton.closest('.dataminr-alert-detail');
+        if (alertDetail) {
+          this.hideMetadataDetails(alertDetail);
         }
         return;
       }

@@ -2345,9 +2345,10 @@ class DataminrIntegration {
         });
       }
       const entityDetailsTargetContainer = Object.assign(document.createElement('div'), {
-        className: 'dataminr-entity-detail', style: 'display: block; margin-top: 0;'
+        className: 'dataminr-entity-detail',
+        style: 'display: block; margin-top: 0;'
       });
-      entityDetailsParent.appendChild(entityDetailsTargetContainer );
+      entityDetailsParent.appendChild(entityDetailsTargetContainer);
       dataminrDetailsContainer.appendChild(entityDetailsParent);
 
       if (detailsContainer && entityDetailsTargetContainer) {
@@ -2378,6 +2379,8 @@ class DataminrIntegration {
       detailsContainerClone.style.display = 'block';
     }
 
+    // Scroll to the top when opening entity details
+    this.scrollToTop(alertDetail);
   }
 
   /**
@@ -2470,11 +2473,16 @@ class DataminrIntegration {
     }
 
     // Find the metadata details overlay
-    const detailsOverlay = alertDetail.querySelector('.dataminr-metadata-details-overlay');
+    const detailsOverlay = alertDetail.querySelector(
+      '.dataminr-metadata-details-overlay'
+    );
     if (!detailsOverlay) {
       console.error('Could not find metadata details overlay');
       return;
     }
+
+    // Determine if Alert is a Pinned Pulse.
+    const isPinnedAlert = alertDetail.hasAttribute('data-alert-id');
 
     // Save scroll position before showing metadata details
     const scrollContainer = this.getScrollableContainer(alertDetail);
@@ -2484,26 +2492,101 @@ class DataminrIntegration {
       savedScrollPosition.toString()
     );
     if (scrollContainer !== window) {
-      alertDetail.setAttribute('data-metadata-scroll-container-id', scrollContainer.id || '');
+      alertDetail.setAttribute(
+        'data-metadata-scroll-container-id',
+        scrollContainer.id || ''
+      );
     }
 
     // Hide entity notification classes in notification overlay scroll container
     this.hideEntityNotifications(alertDetail);
 
     // Find and hide the alert detail content
-    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
-    if (alertDetailContent) {
+    const alertDetailContent = alertDetail.querySelector(
+      '.dataminr-alert-detail-content'
+    );
+
+    // Only hide the alertDetailContent for pinned alerts as non-pinned alerts
+    // are hidden when we hide all entity notifications.
+    if (isPinnedAlert && alertDetailContent) {
       alertDetailContent.style.display = 'none';
     }
 
-    // Show the metadata details overlay
-    detailsOverlay.style.display = 'block';
+    let closeButton;
+    let detailsOverlayClone;
+    // The alert is not pinned which means it is in the wrong location to be viewable
+    // We need to "portal" the element to the correct location
+    if (!isPinnedAlert) {
+      this.deactivateAllTagButtons();
+      this.hideAllDetails();
+
+      // Get or create the details container
+      const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+
+      let metadataDetailsParent = dataminrDetailsContainer.querySelector(
+        '.dataminr-entity-details'
+      );
+
+      if (!metadataDetailsParent) {
+        metadataDetailsParent = Object.assign(document.createElement('div'), {
+          className: this.buildClassName('dataminr-entity-details')
+        });
+      }
+      const metadataDetailsTargetContainer = Object.assign(
+        document.createElement('div'),
+        {
+          className: 'dataminr-entity-detail',
+          style: 'display: block; margin-top: 0;'
+        }
+      );
+      metadataDetailsParent.appendChild(metadataDetailsTargetContainer);
+      dataminrDetailsContainer.appendChild(metadataDetailsParent);
+
+      if (detailsOverlay && metadataDetailsTargetContainer) {
+        metadataDetailsTargetContainer.innerHTML = '';
+        detailsOverlayClone = detailsOverlay.cloneNode(true);
+        metadataDetailsTargetContainer.appendChild(detailsOverlayClone);
+        closeButton = detailsOverlayClone.querySelector(
+          '.dataminr-metadata-details-overlay-close'
+        );
+      }
+    } else {
+      closeButton = detailsOverlay.querySelector(
+        '.dataminr-metadata-details-overlay-close'
+      );
+    }
+
+    // Set up close button handler (after potential cloning) if not already set
+    if (closeButton && !closeButton.hasAttribute('data-handler-attached')) {
+      closeButton.setAttribute('data-handler-attached', 'true');
+      closeButton.addEventListener('click', () => {
+        this.hideMetadataDetails(alertDetail);
+      });
+    }
+
+    // Make the details overlay visible after any potential portaling of
+    // non-pinned alerts
+    if (isPinnedAlert) {
+      detailsOverlay.style.display = 'block';
+    } else if (detailsOverlayClone) {
+      detailsOverlayClone.style.display = 'block';
+    }
 
     // Scroll to the top when opening metadata details
+    this.scrollToTop(alertDetail);
+  }
+
+  /**
+   * Scroll to the top when opening entity ormetadata details
+   * @private
+   * @param {Element} alertDetail - The alert detail element
+   */
+  scrollToTop(alertDetail) {
     setTimeout(() => {
+      // Scroll the scrollable container so entity details container is at the top
       const scrollContainer = this.getScrollableContainer(alertDetail);
       const alertDetailRect = alertDetail.getBoundingClientRect();
-      const paddingTop = 10;
+      const paddingTop = 10; // .dataminr-alert-detail has padding: 10px
       const containerRect = scrollContainer.getBoundingClientRect();
       const relativeTop =
         alertDetailRect.top - containerRect.top + scrollContainer.scrollTop - paddingTop;
@@ -2521,25 +2604,51 @@ class DataminrIntegration {
       return;
     }
 
-    const detailsOverlay = alertDetail.querySelector('.dataminr-metadata-details-overlay');
-    if (detailsOverlay) {
-      detailsOverlay.style.display = 'none';
-    }
+    const isPinnedAlert = alertDetail.hasAttribute('data-alert-id');
 
-    // Restore entity notification classes in notification overlay scroll container
-    this.restoreEntityNotifications(alertDetail);
+    if (isPinnedAlert) {
+      const detailsOverlay = alertDetail.querySelector(
+        '.dataminr-metadata-details-overlay'
+      );
+      if (detailsOverlay) {
+        detailsOverlay.style.display = 'none';
+      }
 
-    // Show the alert detail content
-    const alertDetailContent = alertDetail.querySelector('.dataminr-alert-detail-content');
-    if (alertDetailContent) {
-      alertDetailContent.style.display = 'block';
+      // Restore entity notification classes in notification overlay scroll container
+      this.restoreEntityNotifications(alertDetail);
+
+      // Show the alert detail content
+      const alertDetailContent = alertDetail.querySelector(
+        '.dataminr-alert-detail-content'
+      );
+      if (alertDetailContent) {
+        alertDetailContent.style.display = 'block';
+      }
+    } else {
+      // Get or create the details container
+      const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
+
+      let metadataDetailsTargetContainer = dataminrDetailsContainer.querySelector(
+        '.dataminr-entity-details'
+      );
+
+      if (metadataDetailsTargetContainer) {
+        metadataDetailsTargetContainer.innerHTML = '';
+      }
+
+      // Restore entity notification classes in notification overlay scroll container
+      this.restoreEntityNotifications(alertDetail);
     }
 
     // Restore scroll position
-    const savedScrollPosition = alertDetail.getAttribute('data-saved-metadata-scroll-position');
+    const savedScrollPosition = alertDetail.getAttribute(
+      'data-saved-metadata-scroll-position'
+    );
     if (savedScrollPosition !== null) {
       const scrollPosition = parseFloat(savedScrollPosition);
-      const scrollContainerId = alertDetail.getAttribute('data-metadata-scroll-container-id');
+      const scrollContainerId = alertDetail.getAttribute(
+        'data-metadata-scroll-container-id'
+      );
 
       let scrollContainer;
       if (scrollContainerId) {
@@ -2854,7 +2963,9 @@ class DataminrIntegration {
 
       // Handle metadata details trigger (View additional details for Key Points)
       if (e.target.closest('.dataminr-vulnerability-view-details-trigger')) {
-        const triggerElement = e.target.closest('.dataminr-vulnerability-view-details-trigger');
+        const triggerElement = e.target.closest(
+          '.dataminr-vulnerability-view-details-trigger'
+        );
         e.stopPropagation();
         e.preventDefault();
 

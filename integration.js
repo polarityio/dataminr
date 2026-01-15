@@ -242,18 +242,9 @@ const onMessage = async (payload, options, cb) => {
 
         try {
           // Get alerts from global cache (filtered by listIds if provided)
-          const rawCachedAlerts = await getCachedAlerts();
-          const listAlerts = await getCachedAlerts(listIds);
           const cachedAlerts = getCachedAlerts(listIds, alertFilterTimestamp);
           // Filter cached alerts by alert type
           let alerts = cachedAlerts.filter(alertTypeFilter);
-          const returnObject = {
-            rawCachedAlerts: rawCachedAlerts.length,
-            listAlerts: listAlerts.length,
-            cachedAlerts: cachedAlerts.length,
-            alerts: alerts.length
-          };
-          //Logger.info(returnObject, 'Cached Alerts');
 
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
           if (alertCount && alerts.length < alertCount) {
@@ -264,17 +255,26 @@ const onMessage = async (payload, options, cb) => {
               routePrefix: routePrefix
             };
 
-            // Query API for alerts (count overrides timestamp for initial query)
-            const { alerts: apiAlerts } = await getAlerts(
-              queryOptions,
-              null, // No pagination cursor for user queries
-              alertCount, // Count parameter (overrides timestamp if provided)
-              null // Timestamp ignored when count is provided
-            );
+            try {
+              // Query API for alerts (count overrides timestamp for initial query)
+              const { alerts: apiAlerts } = await getAlerts(
+                queryOptions,
+                null, // No pagination cursor for user queries
+                alertCount, // Count parameter (overrides timestamp if provided)
+                null // Timestamp ignored when count is provided
+              );
 
-            // Filter API alerts by alert type
-            // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
-            alerts = apiAlerts.filter(alertTypeFilter);
+              // Filter API alerts by alert type
+              // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
+              alerts = apiAlerts.filter(alertTypeFilter);
+            } catch (apiError) {
+              const errorStatus = apiError?.status || apiError?.statusCode || apiError?.meta?.statusCode;
+              if (errorStatus === 429 || errorStatus === '429') {
+                Logger.warn({ username }, 'Rate limit encountered, returning cached alerts');
+              } else {
+                throw apiError;
+              }
+            }
           }
 
           if (alertCount) {
@@ -293,7 +293,11 @@ const onMessage = async (payload, options, cb) => {
             { error, formattedError: err, username: username },
             'Failed to get alerts'
           );
-          cb({ detail: error?.detail || error?.message || 'Failed to get alerts', err });
+          cb({
+            detail: error?.detail || error?.message || 'Failed to get alerts',
+            ...(error?.status && { status: error.status }),
+            ...(err && typeof err === 'object' && !Array.isArray(err) && { err })
+          });
         }
         break;
 

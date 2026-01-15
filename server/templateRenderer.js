@@ -282,6 +282,157 @@ function formatHashesValue(hashes) {
 }
 
 /**
+ * Format vulnerabilities array
+ * @param {Array} vulnerabilities - Array of vulnerability objects
+ * @returns {string} Formatted vulnerabilities string
+ */
+function formatVulnerabilitiesValue(vulnerabilities) {
+  if (!Array.isArray(vulnerabilities) || vulnerabilities.length === 0) {
+    return '';
+  }
+  return vulnerabilities
+    .map(function (vuln) {
+      const id = vuln.id || '';
+      const cvss = vuln.cvss !== undefined && vuln.cvss !== null ? ' (CVSS: ' + vuln.cvss + ')' : '';
+      let parts = [id + cvss];
+      
+      // Add products if available
+      if (vuln.products && Array.isArray(vuln.products) && vuln.products.length > 0) {
+        const productStrings = vuln.products.map(function (product) {
+          const vendor = product.productVendor || '';
+          const name = product.productName || '';
+          const version = product.productVersion || '';
+          const parts = [];
+          if (vendor) parts.push(vendor);
+          if (name) parts.push(name);
+          if (version) parts.push(version);
+          return parts.join(' ');
+        }).filter(function (str) {
+          return str.length > 0;
+        });
+        if (productStrings.length > 0) {
+          parts.push('Products: ' + productStrings.join(', '));
+        }
+      }
+      
+      // Add exploit links if available
+      if (vuln.exploitPocLinks && Array.isArray(vuln.exploitPocLinks) && vuln.exploitPocLinks.length > 0) {
+        const links = vuln.exploitPocLinks.filter(function (link) {
+          return link && typeof link === 'string' && link.trim().length > 0;
+        });
+        if (links.length > 0) {
+          parts.push('Exploits: ' + links.join(', '));
+        }
+      }
+      
+      return parts.join(' - ');
+    })
+    .join(' | ');
+}
+
+/**
+ * Limit array to 3 items (first 2 + summary)
+ * @param {Array} array - Array to limit
+ * @param {string} itemType - Type of item for summary text (e.g., 'products', 'vendors', 'links')
+ * @returns {Object} Object with limited array and summary info
+ */
+function limitListToFour(array, itemType) {
+  if (!Array.isArray(array) || array.length === 0) {
+    return {
+      items: [],
+      hasMore: false,
+      moreCount: 0,
+      moreText: ''
+    };
+  }
+
+  if (array.length <= 3) {
+    return {
+      items: array,
+      hasMore: false,
+      moreCount: 0,
+      moreText: ''
+    };
+  }
+
+  const firstThree = array.slice(0, 2);
+  const remaining = array.length - 2;
+  
+  // Handle singular/plural forms
+  let itemTypeSingular = itemType.replace(/s$/, ''); // Remove trailing 's' if present
+  if (itemType === 'links') {
+    itemTypeSingular = 'link';
+  }
+
+  return {
+    items: firstThree,
+    hasMore: true,
+    moreCount: remaining,
+    moreText: '+' + remaining + ' additional ' + (remaining === 1 ? itemTypeSingular : itemType)
+  };
+}
+
+/**
+ * Process vulnerabilities array for structured display
+ * @param {Array} vulnerabilities - Array of vulnerability objects
+ * @returns {Object} Processed vulnerabilities with first item and additional count
+ */
+function processVulnerabilities(vulnerabilities) {
+  if (!Array.isArray(vulnerabilities) || vulnerabilities.length === 0) {
+    return null;
+  }
+
+  const processed = vulnerabilities.map(function (vuln) {
+    // Extract unique vendors
+    const vendors = [];
+    if (vuln.products && Array.isArray(vuln.products)) {
+      vuln.products.forEach(function (product) {
+        const vendor = product.productVendor || '';
+        if (vendor && vendors.indexOf(vendor) === -1) {
+          vendors.push(vendor);
+        }
+      });
+    }
+
+    // Limit vendors to 4 items
+    const vendorsLimited = limitListToFour(vendors, 'vendors');
+
+    // Limit products to 4 items
+    const productsLimited = limitListToFour(vuln.products || [], 'products');
+
+    // Limit exploit links to 4 items
+    const exploitLinksLimited = limitListToFour(vuln.exploitPocLinks || [], 'links');
+
+    return {
+      id: vuln.id || '',
+      cvss: vuln.cvss !== undefined && vuln.cvss !== null ? vuln.cvss : null,
+      vendors: vendorsLimited,
+      products: productsLimited,
+      exploitPocLinks: exploitLinksLimited,
+      // Store full lists for expanded view
+      vendorsFull: vendors,
+      productsFull: vuln.products || [],
+      exploitPocLinksFull: vuln.exploitPocLinks || []
+    };
+  });
+
+  // Check if first vulnerability has any truncated lists
+  const firstVuln = processed[0] || null;
+  const hasTruncatedLists = firstVuln && (
+    firstVuln.vendors.hasMore ||
+    firstVuln.products.hasMore ||
+    firstVuln.exploitPocLinks.hasMore
+  );
+
+  return {
+    first: firstVuln,
+    all: processed,
+    additionalCount: processed.length > 1 ? processed.length - 1 : 0,
+    hasTruncatedLists: hasTruncatedLists || false
+  };
+}
+
+/**
  * Format companies array
  * @param {Array} companies - Array of company objects
  * @returns {string} Formatted companies string
@@ -360,11 +511,16 @@ function processMetadata(alert) {
     (metadata.addresses && metadata.addresses.length > 0) ||
     (metadata.asOrgs && metadata.asOrgs.length > 0) ||
     (metadata.hashValues && metadata.hashValues.length > 0) ||
-    (metadata.malware && metadata.malware.length > 0);
+    (metadata.malware && metadata.malware.length > 0) ||
+    (metadata.vulnerabilities && metadata.vulnerabilities.length > 0);
 
   if (!hasMetadata) {
     return null;
   }
+
+  const vulnerabilitiesData = metadata.vulnerabilities
+    ? processVulnerabilities(metadata.vulnerabilities)
+    : null;
 
   return {
     threatActors: metadata.threatActors || [],
@@ -384,7 +540,12 @@ function processMetadata(alert) {
       ? formatHashesValue(metadata.hashValues)
       : '',
     malware: metadata.malware || [],
-    malwareFormatted: metadata.malware ? joinArray(metadata.malware, ', ', 'name') : ''
+    malwareFormatted: metadata.malware ? joinArray(metadata.malware, ', ', 'name') : '',
+    vulnerabilities: metadata.vulnerabilities || [],
+    vulnerabilitiesFormatted: metadata.vulnerabilities
+      ? formatVulnerabilitiesValue(metadata.vulnerabilities)
+      : '',
+    vulnerabilitiesData: vulnerabilitiesData
   };
 }
 

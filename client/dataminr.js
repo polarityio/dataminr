@@ -223,6 +223,9 @@ class PolarityUtils {
 
     return this.integrationMessenger
       .sendMessage(integrationId, message)
+      .then((result) => {
+        return result;
+      })
       .catch((error) => {
         this.handleIntegrationError(error, payload.action);
         return Promise.reject(error);
@@ -441,7 +444,6 @@ class DataminrIntegration {
     this.lastAlertTimestamp = null; // ISO timestamp of last alert
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
     this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
-    this.defaultAlertTypesToWatch = ['flash', 'urgent', 'alert'];
 
     // Initialize the application
     this.init();
@@ -1287,37 +1289,6 @@ class DataminrIntegration {
    * @returns {number} returns.alert - Count of Alert alerts
    * @returns {number} returns.total - Total count of all alerts
    */
-  /**
-   * Check if an alert type should be included based on alertTypesToWatch configuration
-   * @private
-   * @param {string} alertType - Alert type to check ('Flash', 'Urgent', 'Alert')
-   * @returns {boolean} True if alert type should be included
-   */
-  shouldIncludeAlertType(alertType) {
-    // Get configured alert types to watch (default to all if not configured)
-    const alertTypesToWatch =
-      this.userOptions &&
-      this.userOptions.setAlertTypesToWatch &&
-      this.userOptions.setAlertTypesToWatch.length > 0
-        ? this.userOptions.setAlertTypesToWatch
-        : this.defaultAlertTypesToWatch;
-
-    // Normalize to lowercase for comparison
-    const normalizedTypes = alertTypesToWatch.map((type) => {
-      // If it's an object with a value property, use that
-      if (type && typeof type === 'object' && type.value) {
-        return typeof type.value === 'string'
-          ? type.value.toLowerCase()
-          : String(type.value).toLowerCase();
-      }
-      // Otherwise treat as string
-      return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
-    });
-
-    const normalizedAlertType = alertType ? alertType.toLowerCase() : 'alert';
-    return normalizedTypes.indexOf(normalizedAlertType) !== -1;
-  }
-
   calculateAlertCountsByType() {
     if (!this.currentAlertIds || this.currentAlertIds.size === 0) {
       return { flash: 0, urgent: 0, alert: 0, total: 0 };
@@ -1327,13 +1298,7 @@ class DataminrIntegration {
 
     this.currentAlertIds.forEach((alert) => {
       const alertType = this.getAlertType(alert);
-
-      // Only count alerts that match alertTypesToWatch configuration
-      if (!this.shouldIncludeAlertType(alertType)) {
-        return;
-      }
-
-      const normalizedType = alertType.toLowerCase();
+      const normalizedType = alertType ? alertType.toLowerCase() : 'alert';
 
       if (normalizedType === 'flash') {
         counts.flash++;
@@ -1350,71 +1315,27 @@ class DataminrIntegration {
   }
 
   /**
-   * Determine which alert type icon should be shown based on filter options
-   * Fallback logic: Alert -> Urgent -> Flash
-   * @private
-   * @returns {string|null} The alert type to show ('Alert', 'Urgent', 'Flash') or null if none selected
-   */
-  getAlertTypeToShow() {
-    // Get configured alert types to watch (default to all if not configured)
-    const alertTypesToWatch =
-      this.userOptions &&
-      this.userOptions.setAlertTypesToWatch &&
-      this.userOptions.setAlertTypesToWatch.length > 0
-        ? this.userOptions.setAlertTypesToWatch
-        : this.defaultAlertTypesToWatch;
-
-    // Normalize to lowercase for comparison
-    // Handle both string arrays and object arrays with {value, display} structure
-    const normalizedTypes = alertTypesToWatch.map(function (type) {
-      // If it's an object with a value property, use that
-      if (type && typeof type === 'object' && type.value) {
-        return typeof type.value === 'string'
-          ? type.value.toLowerCase()
-          : String(type.value).toLowerCase();
-      }
-      // Otherwise treat as string
-      return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
-    });
-
-    // Fallback logic: Alert -> Urgent -> Flash
-    if (normalizedTypes.indexOf('alert') !== -1) {
-      return 'Alert';
-    } else if (normalizedTypes.indexOf('urgent') !== -1) {
-      return 'Urgent';
-    } else if (normalizedTypes.indexOf('flash') !== -1) {
-      return 'Flash';
-    }
-
-    // Default to Alert if no filter configured or empty array
-    return 'Alert';
-  }
-
-  /**
    * Update alert counts in UI (by type: Flash, Urgent, Alert)
-   * Only shows the icon for the alert type determined by getAlertTypeToShow()
+   * Shows icons for alert types that have counts > 0
    * @private
    * @param {number} [count] - Optional total count (if not provided, calculates from currentAlertIds)
    */
   updateAlertCount(count) {
     // Calculate counts by type
     const counts = this.calculateAlertCountsByType();
+    const noneIcon = byId('dataminr-alert-icon-none');
     const totalCount = count !== undefined ? count : counts.total;
+    noneIcon.style.display = totalCount > 0 ? 'none' : 'inline-block';
 
     const integrationContainer = this.getIntegrationContainer();
     if (!integrationContainer) return;
-
-    // Determine which alert type icon should be shown based on filter options
-    const alertTypeToShow = this.getAlertTypeToShow();
 
     // Update Flash count
     const flashIcon = qs('.dataminr-alert-icon-flash', integrationContainer);
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
-      // Only show if it's the selected type to show (fallback logic)
-      const shouldShow =
-        alertTypeToShow === 'Flash' ||
-        (counts.flash > 0 && this.shouldIncludeAlertType('Flash'));
+      // Only show if it's the selected type to show or if there are alerts of this type
+      const shouldShow = counts.flash > 0;
       flashIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
@@ -1426,10 +1347,8 @@ class DataminrIntegration {
     const urgentIcon = qs('.dataminr-alert-icon-urgent', integrationContainer);
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
-      // Only show if it's the selected type to show (fallback logic)
-      const shouldShow =
-        alertTypeToShow === 'Urgent' ||
-        (counts.urgent > 0 && this.shouldIncludeAlertType('Urgent'));
+      // Only show if it's the selected type to show or if there are alerts of this type
+      const shouldShow = counts.urgent > 0;
       urgentIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
@@ -1441,10 +1360,8 @@ class DataminrIntegration {
     const alertIcon = qs('.dataminr-alert-icon-alert', integrationContainer);
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
-      // Only show if it's the selected type to show (fallback logic)
-      const shouldShow =
-        alertTypeToShow === 'Alert' ||
-        (counts.alert > 0 && this.shouldIncludeAlertType('Alert'));
+      // Only show if it's the selected type to show or if there are alerts of this type
+      const shouldShow = counts.alert > 0;
       alertIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
@@ -1602,12 +1519,6 @@ class DataminrIntegration {
 
     // Convert Map to array for iteration
     let alertsArray = Array.from(alertsMap.values());
-
-    // Filter by alertTypesToWatch configuration first
-    alertsArray = alertsArray.filter((alert) => {
-      const alertType = this.getAlertType(alert);
-      return this.shouldIncludeAlertType(alertType);
-    });
 
     // Apply user filter if one is active (Flash/Urgent/Alert icon click)
     if (this.currentFilter) {

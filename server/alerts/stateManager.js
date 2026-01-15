@@ -1,4 +1,5 @@
 const NodeCache = require('node-cache');
+const { STATE_KEY, ALERTS_KEY, CACHE_MAX_AGE_MS } = require('../constants');
 
 // Cache for storing polling state
 // Key: 'pollingState', Value: { lastCursor, lastPollTime, alertCount }
@@ -7,10 +8,6 @@ const stateCache = new NodeCache({ stdTTL: 0 }); // No expiration
 // Global cache for storing all polled alerts (sorted by timestamp, newest first)
 // Key: 'alerts', Value: Array of alert objects
 const alertsCache = new NodeCache({ stdTTL: 0 }); // No expiration
-
-const STATE_KEY = 'pollingState';
-const ALERTS_KEY = 'alerts';
-const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
 /**
  * Get the current polling state

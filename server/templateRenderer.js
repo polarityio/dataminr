@@ -2,7 +2,7 @@ const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
 const { getAlertById } = require('./alerts/getAlerts');
-const { routePrefix } = require('../integration');
+const { ROUTE_PREFIX, TRIAL_MODE } = require('./constants');
 
 let templateCache = null;
 let notificationTemplateCache = null;
@@ -870,7 +870,7 @@ async function processLinkedAlerts(alert, options, timezone) {
     })
     .map(function (linkedAlertItem) {
       // Add route prefix to options
-      const optionsWithRoute = { ...options, routePrefix: routePrefix };
+      const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
       return getAlertById(linkedAlertItem.parentAlertId, optionsWithRoute);
     });
 
@@ -1039,7 +1039,8 @@ async function processAlertData(alert, options) {
       : '',
     alertTopics: alert.alertTopics || null,
     alertTopicsFormatted: alert.alertTopics ? formatTopicsValue(alert.alertTopics) : '',
-    metadata: processMetadata(alert)
+    metadata: processMetadata(alert),
+    trialAlert: TRIAL_MODE
   };
 
   // Process live brief

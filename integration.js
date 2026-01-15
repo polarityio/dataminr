@@ -24,12 +24,16 @@ const {
 const { getLists } = require('./server/alerts/getLists');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
+const {
+  ROUTE_PREFIX,
+  DEFAULT_ALERT_TYPES_TO_WATCH,
+  TRIAL_MODE
+} = require('./server/constants');
 
 let pollingInterval = null;
 let Logger = null;
 let pollingInitialized = false;
-const routePrefix = 'pulse';
-const defaultAlertTypesToWatch = ['flash', 'urgent', 'alert'];
+let cachedLists = null; // Cache for lists to return immediately
 
 /**
  * Initialize polling for alerts
@@ -52,14 +56,9 @@ const initializePolling = async (options) => {
   resetPollingState();
 
   // Add route prefix to options
-  const optionsWithRoute = { ...options, routePrefix: routePrefix };
+  const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
 
-  // Start polling immediately
-  try {
-    await pollAlerts(optionsWithRoute);
-  } catch (error) {
-    Logger.error({ error }, 'Initial poll failed, but continuing with interval polling');
-  }
+  pollAlerts(optionsWithRoute);
 
   // Set up polling interval
   const pollIntervalMs = options.pollInterval * 1000; // Convert seconds to milliseconds
@@ -92,12 +91,42 @@ const doLookup = async (entities, options, cb) => {
     const searchableEntities = removePrivateIps(entities);
 
     // Add route prefix to options
-    const optionsWithRoute = { ...options, routePrefix: routePrefix };
+    const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
     const alerts = await searchAlerts(searchableEntities, optionsWithRoute);
 
     Logger.trace({ alerts, searchableEntities });
 
-    const lookupResults = await assembleLookupResults(entities, alerts, options);
+    let lookupResults;
+    if (!TRIAL_MODE) {
+      lookupResults = await assembleLookupResults(entities, alerts, options);
+    } else {
+      // For trial version: return count with trial message instead of real results
+      lookupResults = entities.map((entity) => {
+        // Find alerts for this entity (alerts structure: [{resultId, result: [...]}, ...])
+        const entityResult = alerts.find(
+          (alertResult) => alertResult.resultId === entity.value
+        );
+        const alertCount =
+          entityResult && Array.isArray(entityResult.result)
+            ? entityResult.result.length
+            : 0;
+
+        return {
+          entity,
+          data:
+            alertCount > 0
+              ? {
+                  summary: [`Alerts: ${alertCount}`],
+                  details: {
+                    trialSearch: true,
+                    alertCount: alertCount,
+                    alerts: [] // Empty array - no real results for trial
+                  }
+                }
+              : null
+        };
+      });
+    }
 
     Logger.trace({ lookupResults }, 'Lookup Results');
 
@@ -149,7 +178,7 @@ const createAlertTypeFilter = (options) => {
   const alertTypesToWatch =
     options.setAlertTypesToWatch && options.setAlertTypesToWatch.length > 0
       ? options.setAlertTypesToWatch
-      : defaultAlertTypesToWatch;
+      : DEFAULT_ALERT_TYPES_TO_WATCH;
 
   // Normalize to lowercase for comparison
   // Handle both string arrays and object arrays with {value, display} structure
@@ -191,7 +220,7 @@ const createAlertTypeFilter = (options) => {
 const onMessage = async (payload, options, cb) => {
   try {
     // Initialize polling on first message if not already initialized
-    await initializePolling(options);
+    initializePolling(options);
 
     const { action } = payload;
 
@@ -252,7 +281,7 @@ const onMessage = async (payload, options, cb) => {
             const queryOptions = {
               ...options,
               listIds: listIds,
-              routePrefix: routePrefix
+              routePrefix: ROUTE_PREFIX
             };
 
             try {
@@ -268,9 +297,13 @@ const onMessage = async (payload, options, cb) => {
               // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
               alerts = apiAlerts.filter(alertTypeFilter);
             } catch (apiError) {
-              const errorStatus = apiError?.status || apiError?.statusCode || apiError?.meta?.statusCode;
+              const errorStatus =
+                apiError?.status || apiError?.statusCode || apiError?.meta?.statusCode;
               if (errorStatus === 429 || errorStatus === '429') {
-                Logger.warn({ username }, 'Rate limit encountered, returning cached alerts');
+                Logger.warn(
+                  { username },
+                  'Rate limit encountered, returning cached alerts'
+                );
               } else {
                 throw apiError;
               }
@@ -308,7 +341,7 @@ const onMessage = async (payload, options, cb) => {
           return cb({ detail: 'Missing alertId in payload' });
         }
         // Add route prefix to options
-        const optionsWithRouteForAlert = { ...options, routePrefix: routePrefix };
+        const optionsWithRouteForAlert = { ...options, routePrefix: ROUTE_PREFIX };
         getAlertById(requestedAlertId, optionsWithRouteForAlert)
           .then((alert) => {
             if (alert) {
@@ -389,12 +422,15 @@ const onMessage = async (payload, options, cb) => {
 
       case 'getLists':
         // Get lists from Dataminr API
-        // Add route prefix to options
-        const optionsWithRouteForLists = { ...options, routePrefix: routePrefix };
+        // Return cached lists immediately (or empty array if no cache) - non-blocking
+        cb(null, { lists: cachedLists || [] });
+        
+        // Fetch lists in background to update cache for next request
+        const optionsWithRouteForLists = { ...options, routePrefix: ROUTE_PREFIX };
         getLists(optionsWithRouteForLists)
           .then((lists) => {
-            Logger.debug({ listCount: lists.length }, 'Retrieved lists from API');
-            cb(null, { lists });
+            cachedLists = lists; // Update cache
+            Logger.debug({ listCount: lists.length }, 'Retrieved lists from API (background, cache updated)');
           })
           .catch((error) => {
             // This should never happen since getLists returns empty array on error

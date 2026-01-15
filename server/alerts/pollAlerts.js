@@ -4,7 +4,11 @@ const {
 } = require('polarity-integration-utils');
 
 const { getAlerts } = require('./getAlerts');
-const { getPollingState, updatePollingState } = require('./stateManager');
+const {
+  getPollingState,
+  updatePollingState,
+  getLatestAlertTimestamp
+} = require('./stateManager');
 const { processAlerts } = require('./alertProcessor');
 const { MAX_PAGE_SIZE } = require('../constants');
 
@@ -21,7 +25,7 @@ const sleep = (ms) => {
  * Poll the API for new alerts and process them
  * Uses timestamp-based filtering to get all alerts since last poll.
  * For first poll, fetches MAX_PAGE_SIZE (10) alerts. For subsequent polls, fetches all alerts
- * since lastPollTime by paginating through all pages.
+ * since last alert timestamp by paginating through all pages.
  * @param {Object} options - Configuration options
  * @returns {Promise<Object>} Resolves with polling result object
  * @returns {boolean} returns.success - Whether polling was successful
@@ -37,36 +41,42 @@ const pollAlerts = async (options) => {
 
     const state = getPollingState();
     const isFirstPoll = !state.lastPollTime;
-    
+
     let totalAlertsProcessed = 0;
     let paginationCursor = null;
     let hasMore = false;
     let pageCount = 0;
-    const lastPollTimestamp = state.lastPollTime;
+    // Use latest alert timestamp for filtering consistency (not poll time)
+    const lastAlertTimestamp = getLatestAlertTimestamp();
 
     // First poll: get 10 alerts to start
-    // Subsequent polls: get all alerts since lastPollTime by paginating through all pages
+    // Subsequent polls: get all alerts since last alert timestamp by paginating through all pages
     let totalAlertsFetched = 0; // Track total alerts fetched from API (before filtering)
-    
+
     if (isFirstPoll) {
       Logger.debug('First poll: fetching 10 alerts');
       pageCount = 1; // First poll is always 1 page
-      const { alerts, nextPage, rawAlertCount } = await getAlerts(options, null, 10, null);
+      const { alerts, nextPage, rawAlertCount } = await getAlerts(
+        options,
+        null,
+        10,
+        null
+      );
       totalAlertsFetched = rawAlertCount || 10; // First poll fetches up to 10 alerts
-      
+
       if (alerts.length > 0) {
         await processAlerts(alerts, options);
         totalAlertsProcessed = alerts.length;
       }
-      
+
       hasMore = !!nextPage;
     } else {
-      // Subsequent polls: fetch all alerts since lastPollTime
+      // Subsequent polls: fetch all alerts since last alert timestamp
       // Since Dataminr returns alerts newest first, we paginate until we've gotten everything
       // We stop when a page returns 0 alerts after timestamp filtering (all alerts are older)
       Logger.debug(
-        { lastPollTime: lastPollTimestamp },
-        'Subsequent poll: fetching all alerts since last poll time'
+        { lastAlertTimestamp },
+        'Subsequent poll: fetching all alerts since last alert timestamp'
       );
 
       let continuePaging = true;
@@ -76,13 +86,13 @@ const pollAlerts = async (options) => {
 
       while (continuePaging && pageCount < maxPages) {
         pageCount++;
-        
+
         // Fetch a page of alerts (getAlerts will filter by timestamp client-side)
         const { alerts, nextPage, rawAlertCount } = await getAlerts(
           options,
           paginationCursor,
           null, // No count limit - use timestamp filtering
-          lastPollTimestamp
+          lastAlertTimestamp
         );
 
         // Track total alerts fetched from API (before filtering)
@@ -112,11 +122,11 @@ const pollAlerts = async (options) => {
         // Continue paging if:
         // 1. There's a nextPage AND
         // 2. We got a full page of alerts (10) after filtering
-        // Stop if we got fewer than 10 alerts - this means we've hit alerts older than lastPollTime
+        // Stop if we got fewer than 10 alerts - this means we've hit alerts older than lastAlertTimestamp
         // Since alerts are sorted newest first, if a page has fewer than 10 matching alerts,
         // all subsequent pages will also be older
         continuePaging = !!nextPage && alerts.length === MAX_PAGE_SIZE;
-        
+
         Logger.debug(
           {
             page: pageCount,
@@ -147,7 +157,7 @@ const pollAlerts = async (options) => {
 
     // Update polling state with current timestamp
     updatePollingState({
-      lastPollTime: new Date().toISOString(),
+      lastPollTime: Date.now(),
       alertCount: totalAlertsProcessed,
       totalAlertsProcessed: state.totalAlertsProcessed + totalAlertsProcessed
     });

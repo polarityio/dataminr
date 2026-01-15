@@ -11,7 +11,10 @@ const {
   searchAlerts,
   getAlertById
 } = require('./server/alerts');
-const { getCachedAlerts, getPollingState } = require('./server/alerts/stateManager');
+const {
+  getCachedAlerts,
+  getLatestAlertTimestamp
+} = require('./server/alerts/stateManager');
 const { getAlerts } = require('./server/alerts/getAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
 const {
@@ -137,6 +140,44 @@ const shutdown = () => {
 };
 
 /**
+ * Create a filter function for alert types based on configuration
+ * @param {Object} options - Configuration options
+ * @returns {Function} Filter function that returns true if alert should be included
+ */
+const createAlertTypeFilter = (options) => {
+  // Get configured alert types to watch (default to all if not configured)
+  const alertTypesToWatch =
+    options.setAlertTypesToWatch && options.setAlertTypesToWatch.length > 0
+      ? options.setAlertTypesToWatch
+      : defaultAlertTypesToWatch;
+
+  // Normalize to lowercase for comparison
+  // Handle both string arrays and object arrays with {value, display} structure
+  const normalizedAlertTypesToWatch = alertTypesToWatch.map((type) => {
+    // If it's an object with a value property, use that
+    if (type && typeof type === 'object' && type.value) {
+      return typeof type.value === 'string'
+        ? type.value.toLowerCase()
+        : String(type.value).toLowerCase();
+    }
+    // Otherwise treat as string
+    return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
+  });
+
+  // Return filter function that checks if alert type should be included
+  return (alert) => {
+    if (!normalizedAlertTypesToWatch || normalizedAlertTypesToWatch.length === 0) {
+      return true; // Include all if no filter configured
+    }
+    const alertTypeName =
+      alert.alertType && alert.alertType.name
+        ? alert.alertType.name.toLowerCase()
+        : 'alert';
+    return normalizedAlertTypesToWatch.indexOf(alertTypeName) !== -1;
+  };
+};
+
+/**
  * Handle incoming messages from the client
  * @param {Object} payload - Message payload containing action and other data
  * @param {string} payload.action - Action to perform ('getAlerts', 'getAlertById')
@@ -165,6 +206,9 @@ const onMessage = async (payload, options, cb) => {
         // Extract parameters from payload
         const { sinceTimestamp, count: countParam, listIds: listIdsParam } = payload;
 
+        // Use the latest alert timestamp for filtering consistency
+        const lastAlertTimestamp = getLatestAlertTimestamp() || new Date().toISOString();
+
         // Parse count parameter (from URL or payload)
         const alertCount = countParam ? parseInt(countParam, 10) : null;
 
@@ -188,48 +232,31 @@ const onMessage = async (payload, options, cb) => {
         }
 
         // Use provided timestamp or default to current time if not provided
-        const queryTimestamp = sinceTimestamp || new Date().toISOString();
+        // If alertCount is provided, don't filter by timestamp (return null)
+        const alertFilterTimestamp = alertCount
+          ? null
+          : sinceTimestamp || new Date().toISOString();
 
-        // Get configured alert types to watch (default to all if not configured)
-        const alertTypesToWatch = (options.setAlertTypesToWatch && 
-                                   options.setAlertTypesToWatch.length > 0)
-          ? options.setAlertTypesToWatch
-          : defaultAlertTypesToWatch;
-        // Normalize to lowercase for comparison
-        // Handle both string arrays and object arrays with {value, display} structure
-        const normalizedAlertTypesToWatch = alertTypesToWatch.map((type) => {
-          // If it's an object with a value property, use that
-          if (type && typeof type === 'object' && type.value) {
-            return typeof type.value === 'string' ? type.value.toLowerCase() : String(type.value).toLowerCase();
-          }
-          // Otherwise treat as string
-          return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
-        });
-
-        // Helper function to check if alert type should be included
-        const shouldIncludeAlert = (alert) => {
-          if (!normalizedAlertTypesToWatch || normalizedAlertTypesToWatch.length === 0) {
-            return true; // Include all if no filter configured
-          }
-          const alertTypeName = alert.alertType && alert.alertType.name
-            ? alert.alertType.name.toLowerCase()
-            : 'alert';
-          return normalizedAlertTypesToWatch.indexOf(alertTypeName) !== -1;
-        };
+        // Create alert type filter function
+        const alertTypeFilter = createAlertTypeFilter(options);
 
         try {
           // Get alerts from global cache (filtered by listIds if provided)
-          const cachedAlerts = getCachedAlerts(listIds);
-
+          const rawCachedAlerts = await getCachedAlerts();
+          const listAlerts = await getCachedAlerts(listIds);
+          const cachedAlerts = getCachedAlerts(listIds, alertFilterTimestamp);
           // Filter cached alerts by alert type
-          const filteredCachedAlerts = cachedAlerts.filter(shouldIncludeAlert);
+          let alerts = cachedAlerts.filter(alertTypeFilter);
+          const returnObject = {
+            rawCachedAlerts: rawCachedAlerts.length,
+            listAlerts: listAlerts.length,
+            cachedAlerts: cachedAlerts.length,
+            alerts: alerts.length
+          };
+          //Logger.info(returnObject, 'Cached Alerts');
 
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
-          const needsApiQuery = alertCount && filteredCachedAlerts.length < alertCount;
-
-          let alerts;
-
-          if (needsApiQuery) {
+          if (alertCount && alerts.length < alertCount) {
             // Create options with listIds and route prefix for API query
             const queryOptions = {
               ...options,
@@ -246,47 +273,19 @@ const onMessage = async (payload, options, cb) => {
             );
 
             // Filter API alerts by alert type
-            alerts = apiAlerts.filter(shouldIncludeAlert);
-          } else {
-            // Use filtered cached alerts (already sorted newest first and filtered by listIds and alert type)
-            alerts = filteredCachedAlerts;
-
-            // Filter alerts by timestamp if timestamp is provided and count is not
-            // Since alerts are sorted newest first, we can use early termination
-            if (queryTimestamp && !alertCount) {
-              const sinceDate = new Date(queryTimestamp).getTime();
-              // Use early termination since alerts are sorted newest first
-              // Once we find an alert older than the timestamp, we can stop
-              const filteredAlerts = [];
-              for (let i = 0; i < alerts.length; i++) {
-                const alert = alerts[i];
-                if (!alert.alertTimestamp) {
-                  continue; // Skip alerts without timestamps
-                }
-                const alertTime = new Date(alert.alertTimestamp).getTime();
-                if (alertTime > sinceDate) {
-                  filteredAlerts.push(alert);
-                } else {
-                  // Alerts are sorted newest first, so we can stop here
-                  break;
-                }
-              }
-              alerts = filteredAlerts;
-            } else if (alertCount) {
-              // Limit to requested count if count was provided
-              alerts = alerts.slice(0, alertCount);
-            }
+            // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
+            alerts = apiAlerts.filter(alertTypeFilter);
           }
 
-          // Use the last backend poll timestamp, or current time if polling hasn't started yet
-          const pollingState = getPollingState();
-          const lastQueryTimestamp =
-            pollingState.lastPollTime || new Date().toISOString();
+          if (alertCount) {
+            // Limit to requested count if count was provided
+            alerts = alerts.slice(0, alertCount);
+          }
 
           cb(null, {
             alerts: alerts,
             count: alerts.length,
-            lastQueryTimestamp: lastQueryTimestamp
+            lastAlertTimestamp: lastAlertTimestamp
           });
         } catch (error) {
           const err = parseErrorToReadableJson(error);
@@ -325,7 +324,10 @@ const onMessage = async (payload, options, cb) => {
               { error, formattedError: err, alertId: requestedAlertId },
               'Failed to get alert by ID'
             );
-            cb({ detail: error?.detail || error?.message || 'Failed to get alert by ID', err });
+            cb({
+              detail: error?.detail || error?.message || 'Failed to get alert by ID',
+              err
+            });
           });
         break;
 

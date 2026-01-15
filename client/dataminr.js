@@ -438,7 +438,7 @@ class DataminrIntegration {
     this.currentAlertCache = new Map(); // Map of alertId -> full alert object (# macCacheSize)
     this.currentAlertIds = new Map(); // Map of alertId -> { id, headline, type, alertTimestamp }
     this.maxCacheSize = 100;
-    this.lastQueryTimestamp = null; // ISO timestamp of last query
+    this.lastAlertTimestamp = null; // ISO timestamp of last alert
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
     this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
     this.defaultAlertTypesToWatch = ['flash', 'urgent', 'alert'];
@@ -801,9 +801,9 @@ class DataminrIntegration {
       // If count is provided (from URL parameter), include it (overrides timestamp)
       if (count) {
         payload.count = count;
-      } else if (this.lastQueryTimestamp) {
+      } else if (this.lastAlertTimestamp) {
         // Otherwise, send the last query timestamp to get alerts since then
-        payload.sinceTimestamp = this.lastQueryTimestamp;
+        payload.sinceTimestamp = this.lastAlertTimestamp;
       } else {
         // First query: send current timestamp (will return empty array)
         payload.sinceTimestamp = new Date().toISOString();
@@ -818,17 +818,17 @@ class DataminrIntegration {
       }
 
       // Update last query timestamp from response
-      if (result && result.lastQueryTimestamp) {
-        this.lastQueryTimestamp = result.lastQueryTimestamp;
+      if (result && result.lastAlertTimestamp) {
+        this.lastAlertTimestamp = result.lastAlertTimestamp;
       } else if (result && result.alerts && result.alerts.length > 0) {
         // If no timestamp in response, use the most recent alert's timestamp
         const mostRecentAlert = result.alerts[0];
         if (mostRecentAlert && mostRecentAlert.alertTimestamp) {
-          this.lastQueryTimestamp = mostRecentAlert.alertTimestamp;
+          this.lastAlertTimestamp = mostRecentAlert.alertTimestamp;
         }
-      } else if (!this.lastQueryTimestamp) {
+      } else if (!this.lastAlertTimestamp) {
         // First query with no alerts: set timestamp to now
-        this.lastQueryTimestamp = new Date().toISOString();
+        this.lastAlertTimestamp = new Date().toISOString();
       }
 
       if (result && result.alerts) {
@@ -855,7 +855,7 @@ class DataminrIntegration {
     }
 
     // Reset the last query timestamp
-    this.lastQueryTimestamp = null;
+    this.lastAlertTimestamp = null;
 
     // Update alert count to 0
     this.updateAlertCount(0);

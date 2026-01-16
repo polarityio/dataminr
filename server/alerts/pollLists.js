@@ -1,13 +1,14 @@
 const { getLogger } = require('polarity-integration-utils').logging;
 const { requestWithDefaults } = require('../request');
 const { ROUTE_PREFIX } = require('../constants');
+const { setCachedLists } = require('./stateManager');
 
 /**
  * Get lists from Dataminr API
  * @param {Object} options - Configuration options
  * @returns {Promise<Array>} Resolves with array of lists with value and display properties
  */
-const getLists = async (options) => {
+const pollLists = async (options) => {
   const Logger = getLogger();
 
   try {
@@ -41,6 +42,12 @@ const getLists = async (options) => {
 
     Logger.debug({ listCount: formattedLists.length }, 'Retrieved lists from API');
 
+    // Save to cache if lists are not null/empty
+    if (formattedLists && formattedLists.length > 0) {
+      setCachedLists(formattedLists);
+      Logger.debug('Lists saved to cache');
+    }
+
     return formattedLists;
   } catch (error) {
     Logger.error(
@@ -56,7 +63,7 @@ const getLists = async (options) => {
  * @param {Array<Object>} setListsToWatch - Array of list objects from user options
  * @returns {Array<string>} Normalized array of list IDs
  */
-const normalizeListIds = (setListsToWatch) => {
+const parseListConfig = (setListsToWatch) => {
   let normalizedListIds = null;
   if (setListsToWatch && Array.isArray(setListsToWatch) && setListsToWatch.length > 0) {
     // Extract listIds from user options
@@ -72,6 +79,6 @@ const normalizeListIds = (setListsToWatch) => {
 };
 
 module.exports = {
-  getLists,
-  normalizeListIds
+  pollLists,
+  parseListConfig
 };

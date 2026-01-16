@@ -1,5 +1,5 @@
 const NodeCache = require('node-cache');
-const { STATE_KEY, ALERTS_KEY, CACHE_MAX_AGE_MS } = require('../constants');
+const { STATE_KEY, ALERTS_KEY, LISTS_KEY, CACHE_MAX_AGE_MS } = require('../constants');
 
 // Cache for storing polling state
 // Key: 'pollingState', Value: { lastCursor, lastPollTime, alertCount }
@@ -8,6 +8,10 @@ const stateCache = new NodeCache({ stdTTL: 0 }); // No expiration
 // Global cache for storing all polled alerts (sorted by timestamp, newest first)
 // Key: 'alerts', Value: Array of alert objects
 const alertsCache = new NodeCache({ stdTTL: 0 }); // No expiration
+
+// Global cache for storing lists
+// Key: 'lists', Value: Array of list objects with value and display properties
+const listsCache = new NodeCache({ stdTTL: 0 }); // No expiration
 
 /**
  * Get the current polling state
@@ -196,6 +200,25 @@ const getLatestAlertTimestamp = () => {
   return null;
 };
 
+/**
+ * Get cached lists
+ * @returns {Array<Object>} Array of list objects with value and display properties
+ */
+const getCachedLists = () => {
+  return listsCache.get(LISTS_KEY) || [];
+};
+
+/**
+ * Set cached lists
+ * @param {Array<Object>} lists - Array of list objects with value and display properties
+ * @returns {void}
+ */
+const setCachedLists = (lists) => {
+  if (lists && Array.isArray(lists) && lists.length > 0) {
+    listsCache.set(LISTS_KEY, lists);
+  }
+};
+
 module.exports = {
   getPollingState,
   updatePollingState,
@@ -203,5 +226,7 @@ module.exports = {
   getCachedAlerts,
   addAlertsToCache,
   clearCachedAlerts,
-  getLatestAlertTimestamp
+  getLatestAlertTimestamp,
+  getCachedLists,
+  setCachedLists
 };

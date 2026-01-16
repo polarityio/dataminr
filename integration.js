@@ -7,13 +7,16 @@ const { validateOptions } = require('./server/userOptions');
 const { removePrivateIps } = require('./server/dataTransformations');
 const {
   pollAlerts,
+  pollLists,
   resetPollingState,
   searchAlerts,
-  getAlertById
+  getAlertById,
+  parseListConfig
 } = require('./server/alerts');
 const {
   getCachedAlerts,
-  getLatestAlertTimestamp
+  getLatestAlertTimestamp,
+  getCachedLists
 } = require('./server/alerts/stateManager');
 const { getAlerts } = require('./server/alerts/getAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
@@ -21,18 +24,18 @@ const {
   renderAlertDetail,
   renderAlertNotification
 } = require('./server/templateRenderer');
-const { getLists, normalizeListIds } = require('./server/alerts/getLists');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
 const {
   DEFAULT_ALERT_TYPES_TO_WATCH,
-  TRIAL_MODE
+  TRIAL_MODE,
+  LISTS_POLL_INTERVAL_MS
 } = require('./server/constants');
 
-let pollingInterval = null;
 let Logger = null;
+let alertPollingInterval = null;
+let listsPollingInterval = null;
 let pollingInitialized = false;
-let cachedLists = null; // Cache for lists to return immediately
 
 /**
  * Initialize polling for alerts
@@ -54,17 +57,26 @@ const initializePolling = async (options) => {
   // Reset polling state on first initialization
   resetPollingState();
   pollAlerts(options);
+  pollLists(options);
 
-  // Set up polling interval
-  const pollIntervalMs = options.pollInterval * 1000; // Convert seconds to milliseconds
+  // Set up polling interval for alerts - admin configurable
+  const alertPollIntervalMs = options.pollInterval * 1000; // Convert seconds to milliseconds
 
-  pollingInterval = setInterval(async () => {
+  alertPollingInterval = setInterval(async () => {
     try {
       pollAlerts(options);
     } catch (error) {
       Logger.error({ error }, 'Error in polling interval');
     }
-  }, pollIntervalMs);
+  }, alertPollIntervalMs);
+
+  listsPollingInterval = setInterval(async () => {
+    try {
+      pollLists(options);
+    } catch (error) {
+      Logger.error({ error }, 'Error in lists polling interval');
+    }
+  }, LISTS_POLL_INTERVAL_MS);
 
   pollingInitialized = true;
 
@@ -152,9 +164,15 @@ const startup = async (logger) => {
  * @returns {void}
  */
 const shutdown = () => {
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
+  if (alertPollingInterval) {
+    clearInterval(alertPollingInterval);
+    alertPollingInterval = null;
+  }
+  if (listsPollingInterval) {
+    clearInterval(listsPollingInterval);
+    listsPollingInterval = null;
+  }
+  if (pollingInitialized) {
     pollingInitialized = false;
     Logger.info('Polling stopped');
   }
@@ -213,7 +231,7 @@ const onMessage = async (payload, options, cb) => {
   try {
     // Initialize polling on first message if not already initialized
     initializePolling(options);
-    const listIds = normalizeListIds(options.setListsToWatch);
+    const listIds = parseListConfig(options.setListsToWatch);
 
     const { action } = payload;
 
@@ -386,26 +404,9 @@ const onMessage = async (payload, options, cb) => {
         break;
 
       case 'getLists':
-        // Get lists from Dataminr API
-        // Return cached lists immediately (or empty array if no cache) - non-blocking
+        // Get lists from cache
+        const cachedLists = getCachedLists();
         cb(null, { lists: cachedLists || [] });
-
-        // Fetch lists in background to update cache for next request
-        getLists(options)
-          .then((lists) => {
-            cachedLists = lists; // Update cache
-            Logger.debug(
-              { listCount: lists.length },
-              'Retrieved lists from API (background, cache updated)'
-            );
-          })
-          .catch((error) => {
-            // This should never happen since getLists returns empty array on error
-            // But keeping for safety
-            const err = parseErrorToReadableJson(error);
-            Logger.error({ error, formattedError: err }, 'Unexpected error in getLists');
-            cb(null, { lists: [] });
-          });
         break;
 
       default:

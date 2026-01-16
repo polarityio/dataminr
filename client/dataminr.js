@@ -1301,7 +1301,9 @@ class DataminrIntegration {
     const counts = this.calculateAlertCountsByType();
     const noneIcon = byId('dataminr-alert-icon-none');
     const totalCount = count !== undefined ? count : counts.total;
-    noneIcon.style.display = totalCount > 0 ? 'none' : 'inline-block';
+    if (noneIcon) {
+      noneIcon.style.display = totalCount > 0 ? 'none' : 'inline-block';
+    }
 
     const integrationContainer = this.getIntegrationContainer();
     if (!integrationContainer) return;
@@ -1311,7 +1313,7 @@ class DataminrIntegration {
     if (flashIcon) {
       flashIcon.textContent = counts.flash.toString();
       // Only show if it's the selected type to show or if there are alerts of this type
-      const shouldShow = counts.flash > 0;
+      const shouldShow = totalCount > 0 && counts.flash > 0;
       flashIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       flashIcon.style.cursor = 'pointer';
@@ -1324,7 +1326,7 @@ class DataminrIntegration {
     if (urgentIcon) {
       urgentIcon.textContent = counts.urgent.toString();
       // Only show if it's the selected type to show or if there are alerts of this type
-      const shouldShow = counts.urgent > 0;
+      const shouldShow = totalCount > 0 && counts.urgent > 0;
       urgentIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       urgentIcon.style.cursor = 'pointer';
@@ -1337,7 +1339,7 @@ class DataminrIntegration {
     if (alertIcon) {
       alertIcon.textContent = counts.alert.toString();
       // Only show if it's the selected type to show or if there are alerts of this type
-      const shouldShow = counts.alert > 0;
+      const shouldShow = totalCount > 0 && counts.alert > 0;
       alertIcon.style.display = shouldShow ? 'inline-block' : 'none';
       // Make it clickable and update opacity based on filter
       alertIcon.style.cursor = 'pointer';
@@ -1834,7 +1836,7 @@ class DataminrIntegration {
    * Update the configuration options for the Dataminr available lists
    * @private
    */
-  async updateListsToWatch() {
+  async updateListConfigSelect() {
     try {
       // Fetch lists from backend
       const response = await this.sendIntegrationMessage({
@@ -1876,7 +1878,7 @@ class DataminrIntegration {
     }, 1000);
 
     // Update lists to watch asynchronously
-    this.updateListsToWatch().catch((error) => {
+    this.updateListConfigSelect().catch((error) => {
       console.error('Error updating lists to watch:', error);
     });
 

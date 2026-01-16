@@ -2,10 +2,10 @@ const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
 const { getAlertById } = require('./alerts/getAlerts');
+const { TRIAL_MODE } = require('./constants');
 
 let templateCache = null;
 let notificationTemplateCache = null;
-const routePrefix = 'pulse';
 
 /**
  * Load and compile the alert detail template
@@ -103,14 +103,14 @@ function formatTimestampValue(timestamp, timezone) {
         year: 'numeric'
       });
       formattedDate = formatter.format(date);
-      
+
       // Get timezone abbreviation (e.g., EST, PST, UTC)
       const tzFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         timeZoneName: 'short'
       });
       const parts = tzFormatter.formatToParts(date);
-      const tzPart = parts.find(part => part.type === 'timeZoneName');
+      const tzPart = parts.find((part) => part.type === 'timeZoneName');
       timezoneLabel = tzPart ? ' ' + tzPart.value : '';
     } catch (error) {
       // Fallback to default formatting if timezone is invalid
@@ -146,8 +146,9 @@ function formatTimestampValue(timestamp, timezone) {
     const day = date.getDate();
     const year = date.getFullYear();
 
-    formattedDate = hours + ':' + minutesStr + ' ' + ampm + ' ' + month + ' ' + day + ', ' + year;
-    
+    formattedDate =
+      hours + ':' + minutesStr + ' ' + ampm + ' ' + month + ' ' + day + ', ' + year;
+
     // If no timezone provided, indicate what timezone is being displayed (local time)
     if (!timezone) {
       try {
@@ -155,7 +156,7 @@ function formatTimestampValue(timestamp, timezone) {
           timeZoneName: 'short'
         });
         const localParts = localTzFormatter.formatToParts(date);
-        const localTzPart = localParts.find(part => part.type === 'timeZoneName');
+        const localTzPart = localParts.find((part) => part.type === 'timeZoneName');
         timezoneLabel = localTzPart ? ' (' + localTzPart.value + ')' : '';
       } catch (error) {
         // Ignore error, just don't show timezone
@@ -293,30 +294,37 @@ function formatVulnerabilitiesValue(vulnerabilities) {
   return vulnerabilities
     .map(function (vuln) {
       const id = vuln.id || '';
-      const cvss = vuln.cvss !== undefined && vuln.cvss !== null ? ' (CVSS: ' + vuln.cvss + ')' : '';
+      const cvss =
+        vuln.cvss !== undefined && vuln.cvss !== null ? ' (CVSS: ' + vuln.cvss + ')' : '';
       let parts = [id + cvss];
-      
+
       // Add products if available
       if (vuln.products && Array.isArray(vuln.products) && vuln.products.length > 0) {
-        const productStrings = vuln.products.map(function (product) {
-          const vendor = product.productVendor || '';
-          const name = product.productName || '';
-          const version = product.productVersion || '';
-          const parts = [];
-          if (vendor) parts.push(vendor);
-          if (name) parts.push(name);
-          if (version) parts.push(version);
-          return parts.join(' ');
-        }).filter(function (str) {
-          return str.length > 0;
-        });
+        const productStrings = vuln.products
+          .map(function (product) {
+            const vendor = product.productVendor || '';
+            const name = product.productName || '';
+            const version = product.productVersion || '';
+            const parts = [];
+            if (vendor) parts.push(vendor);
+            if (name) parts.push(name);
+            if (version) parts.push(version);
+            return parts.join(' ');
+          })
+          .filter(function (str) {
+            return str.length > 0;
+          });
         if (productStrings.length > 0) {
           parts.push('Products: ' + productStrings.join(', '));
         }
       }
-      
+
       // Add exploit links if available
-      if (vuln.exploitPocLinks && Array.isArray(vuln.exploitPocLinks) && vuln.exploitPocLinks.length > 0) {
+      if (
+        vuln.exploitPocLinks &&
+        Array.isArray(vuln.exploitPocLinks) &&
+        vuln.exploitPocLinks.length > 0
+      ) {
         const links = vuln.exploitPocLinks.filter(function (link) {
           return link && typeof link === 'string' && link.trim().length > 0;
         });
@@ -324,7 +332,7 @@ function formatVulnerabilitiesValue(vulnerabilities) {
           parts.push('Exploits: ' + links.join(', '));
         }
       }
-      
+
       return parts.join(' - ');
     })
     .join(' | ');
@@ -357,7 +365,7 @@ function limitListToFour(array, itemType) {
 
   const firstThree = array.slice(0, 2);
   const remaining = array.length - 2;
-  
+
   // Handle singular/plural forms
   let itemTypeSingular = itemType.replace(/s$/, ''); // Remove trailing 's' if present
   if (itemType === 'links') {
@@ -368,7 +376,8 @@ function limitListToFour(array, itemType) {
     items: firstThree,
     hasMore: true,
     moreCount: remaining,
-    moreText: '+' + remaining + ' additional ' + (remaining === 1 ? itemTypeSingular : itemType)
+    moreText:
+      '+' + remaining + ' additional ' + (remaining === 1 ? itemTypeSingular : itemType)
   };
 }
 
@@ -418,11 +427,11 @@ function processVulnerabilities(vulnerabilities) {
 
   // Check if first vulnerability has any truncated lists
   const firstVuln = processed[0] || null;
-  const hasTruncatedLists = firstVuln && (
-    firstVuln.vendors.hasMore ||
-    firstVuln.products.hasMore ||
-    firstVuln.exploitPocLinks.hasMore
-  );
+  const hasTruncatedLists =
+    firstVuln &&
+    (firstVuln.vendors.hasMore ||
+      firstVuln.products.hasMore ||
+      firstVuln.exploitPocLinks.hasMore);
 
   return {
     first: firstVuln,
@@ -484,14 +493,14 @@ function formatListsMatchedValue(listsMatched) {
  * @returns {string} Formatted names string
  */
 function formatNamesValue(items, delimiter = ' | ') {
-    if (!Array.isArray(items) || items.length === 0) {
-        return '';
-      }
-      return items
-        .map(function (item) {
-          return item.name || '';
-        })
-        .join(delimiter);
+  if (!Array.isArray(items) || items.length === 0) {
+    return '';
+  }
+  return items
+    .map(function (item) {
+      return item.name || '';
+    })
+    .join(delimiter);
 }
 
 /**
@@ -860,9 +869,7 @@ async function processLinkedAlerts(alert, options, timezone) {
       );
     })
     .map(function (linkedAlertItem) {
-      // Add route prefix to options
-      const optionsWithRoute = { ...options, routePrefix: routePrefix };
-      return getAlertById(linkedAlertItem.parentAlertId, optionsWithRoute);
+      return getAlertById(linkedAlertItem.parentAlertId, options);
     });
 
   // Fetch all linked alerts in parallel
@@ -949,7 +956,8 @@ function extractTimezone(options) {
 
   // Check request headers (e.g., X-Timezone header)
   if (options._request && options._request.headers) {
-    const tzHeader = options._request.headers['x-timezone'] || options._request.headers['X-Timezone'];
+    const tzHeader =
+      options._request.headers['x-timezone'] || options._request.headers['X-Timezone'];
     if (tzHeader) {
       return tzHeader;
     }
@@ -984,14 +992,18 @@ async function processAlertData(alert, options) {
   const publicPost = alert.publicPost || null;
   let publicPostTimestampFormatted = null;
   let publicPostChannelsFormatted = null;
-  
+
   if (publicPost) {
     // Pulse API includes timestamp in publicPost
     if (publicPost.timestamp) {
       publicPostTimestampFormatted = formatTimestampValue(publicPost.timestamp, timezone);
     }
     // Pulse API includes channels array in publicPost
-    if (publicPost.channels && Array.isArray(publicPost.channels) && publicPost.channels.length > 0) {
+    if (
+      publicPost.channels &&
+      Array.isArray(publicPost.channels) &&
+      publicPost.channels.length > 0
+    ) {
       publicPostChannelsFormatted = publicPost.channels.join(', ');
     }
   }
@@ -1011,7 +1023,9 @@ async function processAlertData(alert, options) {
     publicPostChannelsFormatted: publicPostChannelsFormatted,
     alertReferenceTerms: processReferenceTerms(alert),
     listsMatched: alert.listsMatched || null,
-    listsMatchedFormatted: alert.listsMatched ? formatListsMatchedValue(alert.listsMatched) : '',
+    listsMatchedFormatted: alert.listsMatched
+      ? formatListsMatchedValue(alert.listsMatched)
+      : '',
     // Pulse API specific fields (will be null for First Alert API)
     alertCompanies: alert.alertCompanies || null,
     alertCompaniesFormatted: alert.alertCompanies
@@ -1023,7 +1037,8 @@ async function processAlertData(alert, options) {
       : '',
     alertTopics: alert.alertTopics || null,
     alertTopicsFormatted: alert.alertTopics ? formatTopicsValue(alert.alertTopics) : '',
-    metadata: processMetadata(alert)
+    metadata: processMetadata(alert),
+    trialAlert: TRIAL_MODE
   };
 
   // Process live brief
@@ -1044,7 +1059,7 @@ async function processAlertData(alert, options) {
       processed.discoveredEntities = intelAgentsData.discoveredEntities;
     }
   }
-  
+
   processed.hasAIContent = !!(processed.liveBrief || processed.intelAgentsGrouped);
 
   // Process public post media (handles both API formats)

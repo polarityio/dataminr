@@ -81,7 +81,7 @@
     {
       "key": "setListsToWatch",
       "name": "Filter Lists",
-      "description": "Filter the lists for pinned alerts",
+      "description": "User can filter the alerts based on lists for pinned alerts",
       "type": "select",
       "default": [],
       "userCanEdit": true,
@@ -92,22 +92,9 @@
     {
       "key": "setAlertTypesToWatch",
       "name": "Filter Alert Types",
-      "description": "Filter the alert types retrieved for pinned alerts",
+      "description": "Admin can filter the alert types retrieved for pinned alerts",
       "type": "select",
-      "default": [
-        {
-          "value": "flash",
-          "display": "Flash"
-        },
-        {
-          "value": "urgent",
-          "display": "Urgent"
-        },
-        {
-          "value": "alert",
-          "display": "Alert"
-        }
-      ],
+      "default": [],
       "userCanEdit": false,
       "adminOnly": true,
       "multiple": true,

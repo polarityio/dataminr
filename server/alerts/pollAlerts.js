@@ -4,13 +4,9 @@ const {
 } = require('polarity-integration-utils');
 
 const { getAlerts } = require('./getAlerts');
-const {
-  getPollingState,
-  updatePollingState,
-  getLatestAlertTimestamp
-} = require('./stateManager');
+const { getPollingState, updatePollingState } = require('./stateManager');
 const { processAlerts } = require('./alertProcessor');
-const { MAX_PAGE_SIZE } = require('../constants');
+const { DEFAULT_PAGE_SIZE } = require('../constants');
 
 /**
  * Sleep for a specified number of milliseconds
@@ -24,7 +20,7 @@ const sleep = (ms) => {
 /**
  * Poll the API for new alerts and process them
  * Uses cursor-based pagination to resume from the last position in the stream.
- * For first poll, fetches MAX_PAGE_SIZE (10) alerts and saves the cursor.
+ * For first poll, fetches DEFAULT_PAGE_SIZE (10) alerts and saves the cursor.
  * For subsequent polls, resumes from the saved cursor and paginates foward until
  * all new alerts are fetched (using timestamp filtering to determine when to stop).
  * @param {Object} options - Configuration options
@@ -57,7 +53,7 @@ const pollAlerts = async (options) => {
     if (isFirstPoll) {
       Logger.debug('First poll: fetching 10 alerts');
       pageCount = 1; // First poll is always 1 page
-      const { alerts, nextPageCursor } = await getAlerts(options, (count = 10));
+      const { alerts, nextPageCursor } = await getAlerts(options, { pageSize: 10 });
       totalAlertsFetched = alerts.length; // First poll fetches up to 10 alerts
 
       if (alerts.length > 0) {
@@ -82,10 +78,7 @@ const pollAlerts = async (options) => {
         pageCount++;
 
         // Fetch a page of alerts (getAlerts will filter by timestamp client-side)
-        const { alerts, nextPageCursor } = await getAlerts(
-          options,
-          (fromCursor = lastCursor)
-        );
+        const { alerts, nextPageCursor } = await getAlerts(options, { from: lastCursor });
 
         lastCursor = nextPageCursor ? nextPageCursor : lastCursor;
         totalAlertsFetched += alerts.length;
@@ -96,7 +89,7 @@ const pollAlerts = async (options) => {
           totalAlertsProcessed += alerts.length;
         }
 
-        if (alerts.length < MAX_PAGE_SIZE) {
+        if (alerts.length < DEFAULT_PAGE_SIZE) {
           continuePaging = false;
         }
 

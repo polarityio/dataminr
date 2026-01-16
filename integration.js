@@ -21,11 +21,10 @@ const {
   renderAlertDetail,
   renderAlertNotification
 } = require('./server/templateRenderer');
-const { getLists } = require('./server/alerts/getLists');
+const { getLists, normalizeListIds } = require('./server/alerts/getLists');
 
 const assembleLookupResults = require('./server/assembleLookupResults');
 const {
-  ROUTE_PREFIX,
   DEFAULT_ALERT_TYPES_TO_WATCH,
   TRIAL_MODE
 } = require('./server/constants');
@@ -54,18 +53,14 @@ const initializePolling = async (options) => {
 
   // Reset polling state on first initialization
   resetPollingState();
-
-  // Add route prefix to options
-  const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
-
-  pollAlerts(optionsWithRoute);
+  pollAlerts(options);
 
   // Set up polling interval
   const pollIntervalMs = options.pollInterval * 1000; // Convert seconds to milliseconds
 
   pollingInterval = setInterval(async () => {
     try {
-      pollAlerts(optionsWithRoute);
+      pollAlerts(options);
     } catch (error) {
       Logger.error({ error }, 'Error in polling interval');
     }
@@ -89,10 +84,7 @@ const doLookup = async (entities, options, cb) => {
     Logger.debug({ entities }, 'Entities');
 
     const searchableEntities = removePrivateIps(entities);
-
-    // Add route prefix to options
-    const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
-    const alerts = await searchAlerts(searchableEntities, optionsWithRoute);
+    const alerts = await searchAlerts(searchableEntities, options);
 
     Logger.trace({ alerts, searchableEntities });
 
@@ -221,6 +213,7 @@ const onMessage = async (payload, options, cb) => {
   try {
     // Initialize polling on first message if not already initialized
     initializePolling(options);
+    const listIds = normalizeListIds(options.setListsToWatch);
 
     const { action } = payload;
 
@@ -241,22 +234,6 @@ const onMessage = async (payload, options, cb) => {
         // Parse count parameter (from URL or payload)
         const alertCount = countParam ? parseInt(countParam, 10) : null;
 
-        let listIds = null;
-        if (
-          options.setListsToWatch &&
-          Array.isArray(options.setListsToWatch) &&
-          options.setListsToWatch.length > 0
-        ) {
-          // Extract listIds from user options
-          listIds = options.setListsToWatch
-            .map((list) => list.value)
-            .filter((id) => id && id !== '0');
-          // If listIds is empty after filtering, set to null (no filtering)
-          if (listIds.length === 0) {
-            listIds = null;
-          }
-        }
-
         // Use provided timestamp or default to current time if not provided
         // If alertCount is provided, don't filter by timestamp (return null)
         const alertFilterTimestamp = alertCount
@@ -274,19 +251,12 @@ const onMessage = async (payload, options, cb) => {
 
           // Check if we need to query API (only if count is requested and cache doesn't have enough)
           if (alertCount && alerts.length < alertCount) {
-            // Create options with listIds and route prefix for API query
-            const queryOptions = {
-              ...options,
-              listIds: listIds,
-              routePrefix: ROUTE_PREFIX
-            };
-
             try {
               // Query API for alerts (count overrides timestamp for initial query)
-              const { alerts: apiAlerts } = await getAlerts(
-                queryOptions,
-                (count = alertCount) // Count parameter (overrides timestamp if provided)
-              );
+              const { alerts: apiAlerts } = await getAlerts(options, {
+                listIds: listIds,
+                pageSize: alertCount
+              });
 
               // Filter API alerts by alert type
               // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
@@ -335,9 +305,9 @@ const onMessage = async (payload, options, cb) => {
         if (!requestedAlertId) {
           return cb({ detail: 'Missing alertId in payload' });
         }
-        // Add route prefix to options
-        const optionsWithRouteForAlert = { ...options, routePrefix: ROUTE_PREFIX };
-        getAlertById(requestedAlertId, optionsWithRouteForAlert)
+
+        const optionsWithListIds = { ...options, listIds: listIds };
+        getAlertById(requestedAlertId, optionsWithListIds)
           .then((alert) => {
             if (alert) {
               Logger.debug(
@@ -421,8 +391,7 @@ const onMessage = async (payload, options, cb) => {
         cb(null, { lists: cachedLists || [] });
 
         // Fetch lists in background to update cache for next request
-        const optionsWithRouteForLists = { ...options, routePrefix: ROUTE_PREFIX };
-        getLists(optionsWithRouteForLists)
+        getLists(options)
           .then((lists) => {
             cachedLists = lists; // Update cache
             Logger.debug(

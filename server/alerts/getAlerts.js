@@ -4,7 +4,7 @@ const {
 } = require('polarity-integration-utils');
 
 const { requestWithDefaults } = require('../request');
-const { MAX_PAGE_SIZE } = require('../constants');
+const { DEFAULT_PAGE_SIZE, ROUTE_PREFIX } = require('../constants');
 const { getCachedAlerts } = require('./stateManager');
 
 const parseNextPageCursor = (nextPage) => {
@@ -40,53 +40,57 @@ const parsePreviousPageCursor = (previousPage) => {
  * Get alerts from the API with pagination support
  * @param {Object} options - Configuration options
  * @param {string} options.url - Base URL for the API
- * @param {string} options.routePrefix - Route prefix for the API (e.g., 'firstalert' or 'pulse')
- * @param {Array<string>} [options.listIds] - Optional array of list IDs to filter alerts
- * @param {string} [toCursor] - Optional cursor value from previousPage URL's 'to' parameter for fetching alerts before this point
- * @param {string} [fromCursor] - Optional cursor value from nextPage URL's 'from' parameter for fetching alerts after this point
- * @param {number} [count] - Optional number of alerts to return (overrides timestamp on first query)
+ * @param {Object} parameters - Optional parameters for the query
+ * @param {Array<string>} [parameters.listIds] - Optional array of list IDs to filter alerts
+ * @param {string} [parameters.to] - Optional cursor value from previousPage URL's 'to' parameter for fetching alerts before this point
+ * @param {string} [parameters.from] - Optional cursor value from nextPage URL's 'from' parameter for fetching alerts after this point
+ * @param {number} [parameters.pageSize] - Optional number of alerts to return (overrides timestamp on first query)
  * @returns {Promise<Object>} Resolves with object containing alerts array and pagination info
  * @returns {Array<Object>} returns.alerts - Array of alert objects
  * @returns {string|null} returns.nextPageCursor - Next page URL or null
  * @returns {string|null} returns.previousPageCursor - Previous page URL or null
  */
-const getAlerts = async (options, toCursor = null, fromCursor = null, count = null) => {
+const getAlerts = async (
+  options,
+  { listIds = null, to = null, from = null, pageSize = null } = {}
+) => {
   const Logger = getLogger();
 
   try {
-    // Use count as pageSize if it exists and is greater than MAX_PAGE_SIZE, otherwise use MAX_PAGE_SIZE
-    const pageSize = count && count > MAX_PAGE_SIZE ? count : MAX_PAGE_SIZE;
+    // Use pageSize if it exists and is greater than DEFAULT_PAGE_SIZE, otherwise use DEFAULT_PAGE_SIZE
+    const effectivePageSize =
+      typeof pageSize === 'number' && pageSize > DEFAULT_PAGE_SIZE
+        ? pageSize
+        : DEFAULT_PAGE_SIZE;
 
-    const queryParams = {
-      pageSize: pageSize
-    };
+    const queryParams = { pageSize: effectivePageSize };
 
-    // Add pagination cursor if provided (but not if count is specified for initial query)
-    if (toCursor && !count) {
-      queryParams.to = toCursor;
-    }
-
-    if (fromCursor && !count) {
-      queryParams.from = fromCursor;
+    // Add pagination cursor if provided - prefer "from" over "to" if both are provided
+    // If pageSize is specified, only add the cursor if it is not the initial query
+    if (!pageSize) {
+      if (from) {
+        queryParams.from = from;
+      } else if (to) {
+        queryParams.to = to;
+      }
     }
 
     // Add list IDs if configured
-    if (options.listIds && options.listIds.length > 0) {
-      queryParams.lists = options.listIds.join(',');
+    if (listIds && listIds.length > 0) {
+      queryParams.lists = listIds.join(',');
     }
 
-    const fullUrl = `${options.url}/${options.routePrefix}/v1/alerts`;
+    const fullUrl = `${options.url}/${ROUTE_PREFIX}/v1/alerts`;
     Logger.debug(
       {
         url: fullUrl,
-        queryParams,
-        count: count
+        queryParams
       },
       'Fetching alerts from the Dataminr API'
     );
 
     const response = await requestWithDefaults({
-      route: `${options.routePrefix}/v1/alerts`,
+      route: `${ROUTE_PREFIX}/v1/alerts`,
       options,
       qs: queryParams,
       method: 'GET'
@@ -154,18 +158,22 @@ const getAlerts = async (options, toCursor = null, fromCursor = null, count = nu
  * @param {string} alertId - Alert ID to fetch
  * @param {Object} options - Configuration options
  * @param {string} options.url - Base URL for the API
- * @param {string} options.routePrefix - Route prefix for the API (e.g., 'firstalert' or 'pulse')
  * @param {Array<string>} [options.listIds] - Optional array of list IDs to include match reasons
  * @returns {Promise<Object>} Resolves with alert object
  */
 const getAlertById = async (alertId, options) => {
   const Logger = getLogger();
+  let listIds = null;
 
   if (!alertId) {
     throw new Error('Alert ID is required');
   }
 
-  const cachedAlerts = getCachedAlerts();
+  if (options && options.listIds) {
+    listIds = options.listIds;
+  }
+
+  const cachedAlerts = getCachedAlerts(listIds);
   const cachedAlert = cachedAlerts.find((alert) => alert.alertId === alertId);
 
   if (cachedAlert) {
@@ -177,11 +185,11 @@ const getAlertById = async (alertId, options) => {
     const queryParams = {};
 
     // Add list IDs if configured (to include match reasons)
-    if (options.listIds && options.listIds.length > 0) {
-      queryParams.lists = options.listIds.join(',');
+    if (listIds && listIds.length > 0) {
+      queryParams.lists = listIds.join(',');
     }
 
-    const route = `${options.routePrefix}/v1/alerts/${encodeURIComponent(alertId)}`;
+    const route = `${ROUTE_PREFIX}/v1/alerts/${encodeURIComponent(alertId)}`;
     const fullUrl = `${options.url}/${route}`;
     Logger.debug(
       {

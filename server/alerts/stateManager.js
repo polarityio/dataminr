@@ -103,9 +103,6 @@ const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
 
   // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
   if (listIds && listIds.length > 0) {
-    // Convert listIds to strings for comparison (normalize all to strings)
-    const listIdsStrings = listIds.map((id) => String(id).trim());
-
     filteredAlerts = filteredAlerts.filter((alert) => {
       // Check if alert has listsMatched and if any match the requested listIds
       if (!alert.listsMatched || !Array.isArray(alert.listsMatched)) {

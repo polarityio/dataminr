@@ -1745,7 +1745,7 @@ class DataminrIntegration {
    * @private
    */
   async lookupAlertFromUrl() {
-    const alertId = this.getUrlParameter('alert');
+    const alertId = this.getUrlParameter('alert') || this.getUrlParameter('alertId');
     if (!alertId) {
       return;
     }

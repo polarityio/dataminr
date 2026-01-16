@@ -2,7 +2,7 @@ const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
 const { getAlertById } = require('./alerts/getAlerts');
-const { ROUTE_PREFIX, TRIAL_MODE } = require('./constants');
+const { TRIAL_MODE } = require('./constants');
 
 let templateCache = null;
 let notificationTemplateCache = null;
@@ -869,9 +869,7 @@ async function processLinkedAlerts(alert, options, timezone) {
       );
     })
     .map(function (linkedAlertItem) {
-      // Add route prefix to options
-      const optionsWithRoute = { ...options, routePrefix: ROUTE_PREFIX };
-      return getAlertById(linkedAlertItem.parentAlertId, optionsWithRoute);
+      return getAlertById(linkedAlertItem.parentAlertId, options);
     });
 
   // Fetch all linked alerts in parallel

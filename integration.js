@@ -65,7 +65,7 @@ const initializePolling = async (options) => {
 
   pollingInterval = setInterval(async () => {
     try {
-      await pollAlerts(optionsWithRoute);
+      pollAlerts(optionsWithRoute);
     } catch (error) {
       Logger.error({ error }, 'Error in polling interval');
     }
@@ -233,7 +233,7 @@ const onMessage = async (payload, options, cb) => {
     switch (action) {
       case 'getAlerts':
         // Extract parameters from payload
-        const { sinceTimestamp, count: countParam, listIds: listIdsParam } = payload;
+        const { sinceTimestamp, count: countParam } = payload;
 
         // Use the latest alert timestamp for filtering consistency
         const lastAlertTimestamp = getLatestAlertTimestamp() || new Date().toISOString();
@@ -241,19 +241,16 @@ const onMessage = async (payload, options, cb) => {
         // Parse count parameter (from URL or payload)
         const alertCount = countParam ? parseInt(countParam, 10) : null;
 
-        // Parse listIds (comma-separated string or array)
         let listIds = null;
-        if (listIdsParam) {
-          if (typeof listIdsParam === 'string') {
-            // Parse comma-separated string, filter out empty strings and '0'
-            listIds = listIdsParam
-              .split(',')
-              .map((id) => id.trim())
-              .filter((id) => id && id !== '0');
-          } else if (Array.isArray(listIdsParam)) {
-            // Filter out empty strings and '0'
-            listIds = listIdsParam.filter((id) => id && id !== '0');
-          }
+        if (
+          options.setListsToWatch &&
+          Array.isArray(options.setListsToWatch) &&
+          options.setListsToWatch.length > 0
+        ) {
+          // Extract listIds from user options
+          listIds = options.setListsToWatch
+            .map((list) => list.value)
+            .filter((id) => id && id !== '0');
           // If listIds is empty after filtering, set to null (no filtering)
           if (listIds.length === 0) {
             listIds = null;
@@ -288,9 +285,7 @@ const onMessage = async (payload, options, cb) => {
               // Query API for alerts (count overrides timestamp for initial query)
               const { alerts: apiAlerts } = await getAlerts(
                 queryOptions,
-                null, // No pagination cursor for user queries
-                alertCount, // Count parameter (overrides timestamp if provided)
-                null // Timestamp ignored when count is provided
+                (count = alertCount) // Count parameter (overrides timestamp if provided)
               );
 
               // Filter API alerts by alert type
@@ -424,13 +419,16 @@ const onMessage = async (payload, options, cb) => {
         // Get lists from Dataminr API
         // Return cached lists immediately (or empty array if no cache) - non-blocking
         cb(null, { lists: cachedLists || [] });
-        
+
         // Fetch lists in background to update cache for next request
         const optionsWithRouteForLists = { ...options, routePrefix: ROUTE_PREFIX };
         getLists(optionsWithRouteForLists)
           .then((lists) => {
             cachedLists = lists; // Update cache
-            Logger.debug({ listCount: lists.length }, 'Retrieved lists from API (background, cache updated)');
+            Logger.debug(
+              { listCount: lists.length },
+              'Retrieved lists from API (background, cache updated)'
+            );
           })
           .catch((error) => {
             // This should never happen since getLists returns empty array on error

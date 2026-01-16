@@ -7,26 +7,50 @@ const { requestWithDefaults } = require('../request');
 const { MAX_PAGE_SIZE } = require('../constants');
 const { getCachedAlerts } = require('./stateManager');
 
+const parseNextPageCursor = (nextPage) => {
+  try {
+    if (!nextPage) return null;
+    const urlParts = nextPage.split('?');
+    if (urlParts.length > 1) {
+      const urlParams = new URLSearchParams(urlParts[1]);
+      return urlParams.get('from');
+    }
+  } catch (error) {
+    const Logger = getLogger();
+    Logger.warn({ error, nextPage }, 'Failed to parse nextPage URL for cursor');
+  }
+};
+
+const parsePreviousPageCursor = (previousPage) => {
+  try {
+    if (!previousPage) return null;
+    const urlParts = previousPage.split('?');
+    if (urlParts.length > 1) {
+      const urlParams = new URLSearchParams(urlParts[1]);
+      return urlParams.get('to');
+    }
+  } catch (error) {
+    const Logger = getLogger();
+    Logger.warn({ error, previousPage }, 'Failed to parse previousPage URL for cursor');
+    return null;
+  }
+};
+
 /**
  * Get alerts from the API with pagination support
  * @param {Object} options - Configuration options
  * @param {string} options.url - Base URL for the API
  * @param {string} options.routePrefix - Route prefix for the API (e.g., 'firstalert' or 'pulse')
  * @param {Array<string>} [options.listIds] - Optional array of list IDs to filter alerts
- * @param {string} [paginationCursor] - Optional pagination cursor for fetching next page
+ * @param {string} [toCursor] - Optional cursor value from previousPage URL's 'to' parameter for fetching alerts before this point
+ * @param {string} [fromCursor] - Optional cursor value from nextPage URL's 'from' parameter for fetching alerts after this point
  * @param {number} [count] - Optional number of alerts to return (overrides timestamp on first query)
- * @param {string} [sinceTimestamp] - Optional ISO timestamp to filter alerts (returns alerts after this timestamp)
  * @returns {Promise<Object>} Resolves with object containing alerts array and pagination info
  * @returns {Array<Object>} returns.alerts - Array of alert objects
- * @returns {string|null} returns.nextPage - Next page URL or null
- * @returns {string|null} returns.previousPage - Previous page URL or null
+ * @returns {string|null} returns.nextPageCursor - Next page URL or null
+ * @returns {string|null} returns.previousPageCursor - Previous page URL or null
  */
-const getAlerts = async (
-  options,
-  paginationCursor = null,
-  count = null,
-  sinceTimestamp = null
-) => {
+const getAlerts = async (options, toCursor = null, fromCursor = null, count = null) => {
   const Logger = getLogger();
 
   try {
@@ -38,8 +62,12 @@ const getAlerts = async (
     };
 
     // Add pagination cursor if provided (but not if count is specified for initial query)
-    if (paginationCursor && !count) {
-      queryParams.from = paginationCursor;
+    if (toCursor && !count) {
+      queryParams.to = toCursor;
+    }
+
+    if (fromCursor && !count) {
+      queryParams.from = fromCursor;
     }
 
     // Add list IDs if configured
@@ -52,9 +80,7 @@ const getAlerts = async (
       {
         url: fullUrl,
         queryParams,
-        hasCursor: !!paginationCursor,
-        count: count,
-        sinceTimestamp: sinceTimestamp
+        count: count
       },
       'Fetching alerts from the Dataminr API'
     );
@@ -66,48 +92,56 @@ const getAlerts = async (
       method: 'GET'
     });
 
-    let alerts = (response.body && response.body.alerts) || [];
-
-    // Filter alerts by timestamp if sinceTimestamp is provided and count is not (count overrides timestamp)
-    if (sinceTimestamp && !count) {
-      const sinceDate = new Date(sinceTimestamp);
-      alerts = alerts.filter((alert) => {
-        if (!alert.alertTimestamp) {
-          return false;
-        }
-        const alertDate = new Date(alert.alertTimestamp);
-        return alertDate > sinceDate;
-      });
-    }
+    const alerts = (response.body && response.body.alerts) || [];
+    const nextPage = (response.body && response.body.nextPage) || null;
+    const previousPage = (response.body && response.body.previousPage) || null;
 
     Logger.debug(
       {
+        alertTimestamps: alerts.map((alert) => alert.alertTimestamp).slice(0, 3),
         statusCode: response.statusCode,
+        nextPage: nextPage,
+        previousPage: previousPage,
         alertCount: alerts.length,
-        originalAlertCount:
-          response.body && response.body.alerts ? response.body.alerts.length : 0,
-        hasNextPage: !!(response.body && response.body.nextPage),
-        hasPreviousPage: !!(response.body && response.body.previousPage),
-        filteredByTimestamp: !!(sinceTimestamp && !count),
         pageSize: pageSize
       },
       'Dataminr API response received'
     );
 
-    const rawAlertCount = response.body && response.body.alerts ? response.body.alerts.length : 0;
-
     return {
       alerts: alerts,
-      nextPage: (response.body && response.body.nextPage) || null,
-      previousPage: (response.body && response.body.previousPage) || null,
-      rawAlertCount: rawAlertCount // Count of alerts fetched from API before filtering
+      nextPage: nextPage,
+      previousPage: previousPage,
+      nextPageCursor: parseNextPageCursor(nextPage),
+      previousPageCursor: parsePreviousPageCursor(previousPage)
     };
   } catch (error) {
-    const err = parseErrorToReadableJson(error);
+    // Handle rate limiting (429) with a cleaner message
+    const statusCode = error.statusCode || (error.meta && error.meta.statusCode);
+    if (statusCode === 429) {
+      Logger.warn(
+        {
+          statusCode: 429,
+          message: 'Rate limit exceeded - too many requests to Dataminr API'
+        },
+        'Rate limit exceeded while fetching alerts'
+      );
+      // Return empty results instead of throwing for rate limits
+      return {
+        alerts: [],
+        nextPage: null,
+        previousPage: null,
+        nextPageCursor: null,
+        previousPageCursor: null
+      };
+    }
+
+    // For other errors, log with minimal stack trace info
     Logger.error(
       {
-        formattedError: err,
-        error
+        statusCode: statusCode,
+        message: error.message || error.detail || 'Unknown error',
+        detail: error.detail
       },
       'Getting Alerts Failed'
     );

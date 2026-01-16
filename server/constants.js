@@ -1,5 +1,5 @@
 module.exports = {
-  MAX_PAGE_SIZE: 10,
+  MAX_PAGE_SIZE: 40,
   CACHE_MAX_AGE_MS: 30 * 60 * 1000, // 30 minutes in milliseconds
   STATE_KEY: 'pollingState',
   ALERTS_KEY: 'alerts',

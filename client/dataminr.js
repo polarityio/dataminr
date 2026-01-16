@@ -223,9 +223,6 @@ class PolarityUtils {
 
     return this.integrationMessenger
       .sendMessage(integrationId, message)
-      .then((result) => {
-        return result;
-      })
       .catch((error) => {
         this.handleIntegrationError(error, payload.action);
         return Promise.reject(error);
@@ -785,21 +782,6 @@ class DataminrIntegration {
         action: 'getAlerts'
       };
 
-      // Add listIds if setListsToWatch is configured and not empty
-      if (
-        this.userOptions &&
-        this.userOptions.setListsToWatch &&
-        Array.isArray(this.userOptions.setListsToWatch) &&
-        this.userOptions.setListsToWatch.length > 0
-      ) {
-        const listIds = this.userOptions.setListsToWatch
-          .map((list) => list.value)
-          .filter((id) => id && id !== '0');
-        if (listIds.length > 0) {
-          payload.listIds = listIds.join(',');
-        }
-      }
-
       // If count is provided (from URL parameter), include it (overrides timestamp)
       if (count) {
         payload.count = count;
@@ -812,12 +794,6 @@ class DataminrIntegration {
       }
 
       const result = await this.sendIntegrationMessage(payload);
-      let listsMatched = new Map();
-      for (const alert of result.alerts) {
-        for (const list of alert.listsMatched) {
-          listsMatched.set(list.id, list.name);
-        }
-      }
 
       // Update last query timestamp from response
       if (result && result.lastAlertTimestamp) {

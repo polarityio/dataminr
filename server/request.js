@@ -19,6 +19,11 @@ const rateLimitState = {
   windowMs: 30000 // Default: 30 second window
 };
 
+// Request queue for rate limiting
+const requestQueue = [];
+const MAX_QUEUE_SIZE = 12;
+let isProcessingQueue = false;
+
 /**
  * Sleep for a specified number of milliseconds
  * @param {number} ms - Milliseconds to sleep
@@ -66,58 +71,123 @@ const updateRateLimitFromHeaders = (response) => {
 };
 
 /**
- * Check if we should wait before making a request based on rate limit state
- * @returns {Promise<void>} Resolves after waiting if necessary
+ * Process the request queue - executes queued requests one at a time
+ * @returns {Promise<void>}
  */
-const checkRateLimit = async () => {
+const processQueue = async () => {
   const Logger = getLogger();
-  const now = Date.now();
   
-  // Check if rate limit has reset
-  if (rateLimitState.resetAt && now >= rateLimitState.resetAt) {
-    Logger.trace('Rate limit window has reset');
-    rateLimitState.remaining = rateLimitState.limit;
-    rateLimitState.resetAt = null;
-  }
-  
-  // If we have remaining quota, proceed
-  if (rateLimitState.remaining > 0) {
-    // Optimistically decrement (will be corrected by response headers)
-    rateLimitState.remaining--;
+  if (isProcessingQueue || requestQueue.length === 0) {
     return;
   }
   
-  // No quota remaining - wait until reset
-  if (rateLimitState.resetAt && rateLimitState.resetAt > now) {
-    const waitTime = rateLimitState.resetAt - now;
-    Logger.warn(
-      {
-        waitTimeMs: waitTime,
-        resetAt: new Date(rateLimitState.resetAt).toISOString(),
-        limit: rateLimitState.limit
-      },
-      'Rate limit exhausted - waiting until reset'
-    );
-    await sleep(waitTime);
+  isProcessingQueue = true;
+  
+  while (requestQueue.length > 0) {
+    const now = Date.now();
     
-    // After waiting, reset the quota
-    rateLimitState.remaining = rateLimitState.limit;
-    rateLimitState.resetAt = null;
-  } else if (rateLimitState.remaining === 0) {
-    // No reset time known, use default window
-    const waitTime = rateLimitState.windowMs;
-    Logger.warn(
-      {
-        waitTimeMs: waitTime,
-        limit: rateLimitState.limit
-      },
-      'Rate limit exhausted with no reset time - waiting default window'
-    );
-    await sleep(waitTime);
+    // Check if rate limit has reset
+    if (rateLimitState.resetAt && now >= rateLimitState.resetAt) {
+      Logger.trace('Rate limit window has reset during queue processing');
+      rateLimitState.remaining = rateLimitState.limit;
+      rateLimitState.resetAt = null;
+    }
     
-    // Reset quota after default wait
-    rateLimitState.remaining = rateLimitState.limit;
+    // If we have quota remaining, process next request
+    if (rateLimitState.remaining > 0) {
+      const queuedRequest = requestQueue.shift();
+      
+      if (queuedRequest) {
+        Logger.debug(
+          { queueSize: requestQueue.length },
+          'Processing queued request'
+        );
+        
+        // Optimistically decrement quota
+        rateLimitState.remaining--;
+        
+        // Execute the request
+        queuedRequest.execute();
+      }
+    } else {
+      // No quota - wait until reset
+      if (rateLimitState.resetAt && rateLimitState.resetAt > now) {
+        const waitTime = rateLimitState.resetAt - now;
+        Logger.warn(
+          {
+            waitTimeMs: waitTime,
+            queueSize: requestQueue.length,
+            resetAt: new Date(rateLimitState.resetAt).toISOString()
+          },
+          'Rate limit exhausted - waiting to process queue'
+        );
+        await sleep(waitTime);
+        
+        // Reset quota after waiting
+        rateLimitState.remaining = rateLimitState.limit;
+        rateLimitState.resetAt = null;
+      } else {
+        // No reset time known, use default window
+        const waitTime = rateLimitState.windowMs;
+        Logger.warn(
+          {
+            waitTimeMs: waitTime,
+            queueSize: requestQueue.length
+          },
+          'Rate limit exhausted with no reset time - waiting to process queue'
+        );
+        await sleep(waitTime);
+        
+        // Reset quota after waiting
+        rateLimitState.remaining = rateLimitState.limit;
+      }
+    }
   }
+  
+  isProcessingQueue = false;
+};
+
+/**
+ * Queue a request to be executed when rate limit allows
+ * @param {Function} requestFn - The request function to execute
+ * @returns {Promise} Resolves with the request result or rejects if queue is full
+ */
+const queueRequest = async (requestFn) => {
+  const Logger = getLogger();
+  
+  // Check if queue is full
+  if (requestQueue.length >= MAX_QUEUE_SIZE) {
+    const error = new Error(`Request queue full (${MAX_QUEUE_SIZE} requests). Request dropped.`);
+    Logger.error(
+      { queueSize: requestQueue.length, maxQueueSize: MAX_QUEUE_SIZE },
+      'Request queue full - dropping request'
+    );
+    throw error;
+  }
+  
+  return new Promise((resolve, reject) => {
+    // Add request to queue with its resolve/reject handlers
+    requestQueue.push({
+      execute: async () => {
+        try {
+          const result = await requestFn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      }
+    });
+    
+    Logger.debug(
+      { queueSize: requestQueue.length, maxQueueSize: MAX_QUEUE_SIZE },
+      'Request queued'
+    );
+    
+    // Start processing queue if not already running
+    processQueue().catch((err) => {
+      Logger.error({ err }, 'Error processing request queue');
+    });
+  });
 };
 
 // Single request instance for all HTTP requests
@@ -242,11 +312,8 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
   let lastError;
   let attemptNumber = 0;
 
-  // Wrap the request execution with rate limiting
+  // Wrap the request execution in the queue
   const executeRequest = async () => {
-    // Check rate limit before making request
-    await checkRateLimit();
-    
     while (attemptNumber <= maxRetries) {
       try {
         const response = await request.run({
@@ -341,7 +408,8 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
     throw lastError;
   };
 
-  return await executeRequest();
+  // Queue the request - it will be executed when rate limit allows
+  return await queueRequest(executeRequest);
 };
 
 /**

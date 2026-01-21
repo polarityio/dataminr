@@ -28,7 +28,22 @@ const validateOptions = async (options, callback) => {
 
     const urlValidationError = validateUrlOption(options, 'url');
 
-    const errors = stringValidationErrors.concat(urlValidationError);
+    let errors = stringValidationErrors.concat(urlValidationError);
+
+    // Validate maxRequestsPer30Seconds
+    const maxRequestsPer30Seconds = options.maxRequestsPer30Seconds?.value;
+    if (
+      maxRequestsPer30Seconds !== undefined &&
+      (typeof maxRequestsPer30Seconds !== 'number' ||
+        maxRequestsPer30Seconds < 1 ||
+        maxRequestsPer30Seconds > 10 ||
+        !Number.isInteger(maxRequestsPer30Seconds))
+    ) {
+      errors = errors.concat({
+        key: 'maxRequestsPer30Seconds',
+        message: 'Must be a positive integer between 1 and 10'
+      });
+    }
 
     callback(null, errors);
   } catch (error) {

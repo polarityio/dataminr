@@ -11,6 +11,9 @@ const { DateTime } = require('luxon');
 const NodeCache = require('node-cache');
 const tokenCache = new NodeCache();
 
+// Sliding window rate limiter state
+const requestTimestamps = [];
+
 /**
  * Sleep for a specified number of milliseconds
  * @param {number} ms - Milliseconds to sleep
@@ -43,6 +46,56 @@ const getRetryDelay = (error, attemptNumber) => {
   // Attempt 0: 1s, Attempt 1: 2s, Attempt 2: 4s, Attempt 3: 8s, etc.
   const baseDelay = Math.min(Math.pow(2, attemptNumber), 60) * 1000;
   return baseDelay;
+};
+
+/**
+ * Implements a sliding window rate limiter to prevent exceeding API rate limits.
+ * Ensures no more than maxRequests are sent within any 30-second window.
+ * 
+ * @param {Function} requestFn - The async function to execute (makes the actual request)
+ * @param {Object} options - User options containing maxRequestsPer30Seconds
+ * @returns {Promise} - Result of the request function
+ */
+const rateLimitedRequest = async (requestFn, options) => {
+  const Logger = getLogger();
+  const maxRequests = options.maxRequestsPer30Seconds || 6;
+  const windowMs = 30000; // 30 seconds in milliseconds
+
+  const now = Date.now();
+  const windowStart = now - windowMs;
+
+  // Remove timestamps older than 30 seconds
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < windowStart) {
+    requestTimestamps.shift();
+  }
+
+  // If we have reached the max requests in the last 30 seconds, wait
+  if (requestTimestamps.length >= maxRequests) {
+    const oldestTimestamp = requestTimestamps[0];
+    const waitTime = oldestTimestamp + windowMs - now;
+    
+    if (waitTime > 0) {
+      Logger.debug(
+        {
+          waitTimeMs: waitTime,
+          currentRequestCount: requestTimestamps.length,
+          maxRequests
+        },
+        'Rate limit reached - waiting before sending request'
+      );
+      
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+    
+    // Remove the oldest timestamp after waiting
+    requestTimestamps.shift();
+  }
+
+  // Record this request timestamp
+  requestTimestamps.push(Date.now());
+
+  // Execute the request
+  return await requestFn();
 };
 
 // Single request instance for all HTTP requests
@@ -167,87 +220,93 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
   let lastError;
   let attemptNumber = 0;
 
-  while (attemptNumber <= maxRetries) {
-    try {
-      const response = await request.run({
-        ...requestOptions,
-        url: `${options.url}/${route}`,
-        headers: {
-          'X-Application-Name': 'Polarity',
-          Authorization: `Bearer ${token}`,
-          ...(requestOptions.headers || {})
-        },
-        json: true
-      });
+  // Wrap the request execution in rate limiter
+  const executeRequest = async () => {
+    while (attemptNumber <= maxRetries) {
+      try {
+        const response = await request.run({
+          ...requestOptions,
+          url: `${options.url}/${route}`,
+          headers: {
+            'X-Application-Name': 'Polarity',
+            Authorization: `Bearer ${token}`,
+            ...(requestOptions.headers || {})
+          },
+          json: true
+        });
 
-      return response;
-    } catch (error) {
-      lastError = error;
+        return response;
+      } catch (error) {
+        lastError = error;
 
-      // Check if it's a 401 authentication error
-      const errorStatus = error.status || error.statusCode || (error.meta && error.meta.statusCode);
-      const isUnauthorizedError =
-        (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
-        (errorStatus === '401' || errorStatus === 401);
+        // Check if it's a 401 authentication error
+        const errorStatus = error.status || error.statusCode || (error.meta && error.meta.statusCode);
+        const isUnauthorizedError =
+          (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
+          (errorStatus === '401' || errorStatus === 401);
 
-      // If we get a 401 and haven't refreshed the token yet, try to get a new token and retry once
-      if (isUnauthorizedError && !tokenRefreshed) {
-        Logger.warn(
-          { route, errorStatus },
-          'Received 401 unauthorized error, attempting to refresh token'
-        );
+        // If we get a 401 and haven't refreshed the token yet, try to get a new token and retry once
+        if (isUnauthorizedError && !tokenRefreshed) {
+          Logger.warn(
+            { route, errorStatus },
+            'Received 401 unauthorized error, attempting to refresh token'
+          );
 
-        try {
-          // Clear the cached token and get a new one
-          clearToken(options);
-          token = await getToken(options, true);
-          tokenRefreshed = true;
+          try {
+            // Clear the cached token and get a new one
+            clearToken(options);
+            token = await getToken(options, true);
+            tokenRefreshed = true;
 
-          // Retry the request with the new token
+            // Retry the request with the new token
+            attemptNumber++;
+            continue;
+          } catch (tokenError) {
+            // If getting a new token fails (e.g., invalid credentials), throw immediately
+            // Don't retry as this indicates a configuration issue, not an expired token
+            Logger.error(
+              { route, tokenError },
+              'Failed to refresh token, credentials may be invalid'
+            );
+            throw tokenError;
+          }
+        }
+
+        // Check if it's a 429 rate limit error
+        const isRateLimitError =
+          (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
+          (errorStatus === '429' || errorStatus === 429 || String(error.message || error.detail || '').includes('429'));
+
+        if (isRateLimitError && attemptNumber < maxRetries) {
+          const retryDelay = getRetryDelay(error, attemptNumber);
+          Logger.warn(
+            { route, attemptNumber: attemptNumber + 1, maxRetries, retryDelayMs: retryDelay },
+            'Rate limit (429) encountered, retrying request'
+          );
+
+          await sleep(retryDelay);
           attemptNumber++;
           continue;
-        } catch (tokenError) {
-          // If getting a new token fails (e.g., invalid credentials), throw immediately
-          // Don't retry as this indicates a configuration issue, not an expired token
-          Logger.error(
-            { route, tokenError },
-            'Failed to refresh token, credentials may be invalid'
-          );
-          throw tokenError;
         }
+
+        throw error;
       }
-
-      // Check if it's a 429 rate limit error
-      const isRateLimitError =
-        (error instanceof ApiRequestError || error.name === 'ApiRequestError') &&
-        (errorStatus === '429' || errorStatus === 429 || String(error.message || error.detail || '').includes('429'));
-
-      if (isRateLimitError && attemptNumber < maxRetries) {
-        const retryDelay = getRetryDelay(error, attemptNumber);
-        Logger.warn(
-          { route, attemptNumber: attemptNumber + 1, maxRetries, retryDelayMs: retryDelay },
-          'Rate limit (429) encountered, retrying request'
-        );
-
-        await sleep(retryDelay);
-        attemptNumber++;
-        continue;
-      }
-
-      throw error;
     }
-  }
 
-  // If we've exhausted all retries, throw the last error
-  Logger.error(
-    {
-      route,
-      maxRetries,
-      finalAttempt: attemptNumber
-    },
-    'Max retries exceeded for rate-limited request'
-  );
-  throw lastError;
+    // If we've exhausted all retries, throw the last error
+    Logger.error(
+      {
+        route,
+        maxRetries,
+        finalAttempt: attemptNumber
+      },
+      'Max retries exceeded for rate-limited request'
+    );
+    throw lastError;
+  };
+
+  // Apply rate limiting to the entire request execution (including retries)
+  return await rateLimitedRequest(executeRequest, options);
 };
 
 /**

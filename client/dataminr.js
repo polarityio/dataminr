@@ -1648,10 +1648,9 @@ class DataminrIntegration {
    * Load and display alerts
    * @private
    */
-  async loadAlerts() {
+  async loadAlerts(count) {
     // Check for count parameter in URL (for initial query)
-    const countParam = this.getUrlParameter('alertCount');
-    const count = countParam ? parseInt(countParam, 10) : null;
+    if (!count) return;
     const newAlerts = await this.getAlerts(count);
 
     // Merge new alerts into currentAlerts Map
@@ -1775,18 +1774,18 @@ class DataminrIntegration {
    */
   startPolling() {
     // Poll immediately
-    this.pollAlerts();
-    this.loadAlerts();
+    const countParam = this.getUrlParameter('alertCount');
+    const count = countParam ? parseInt(countParam, 10) : null;
+    if (count) {
+      this.loadAlerts(count);
+    } else {
+      this.pollAlerts();
+    }
 
     // Set up polling interval
     this.pollingInterval = setInterval(() => {
       this.pollAlerts();
     }, this.pollIntervalMs);
-
-    // Also reload full alerts every 30 seconds
-    setInterval(() => {
-      this.loadAlerts();
-    }, 30000);
   }
 
   /**

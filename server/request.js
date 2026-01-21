@@ -1,5 +1,4 @@
 const { map, get, getOr, filter, flow, negate, isEmpty } = require('lodash/fp');
-const { queue } = require('async');
 
 const {
   logging: { getLogger },
@@ -108,14 +107,9 @@ const createRequestsInParallel =
     const unexecutedRequestFunctions = map(
       ({ resultId, ...requestOptions }) =>
         async () => {
-          try {
-            const response = await requestWithDefaults(requestOptions);
-            const result = responseGetPath ? get(responseGetPath, response) : response;
-            return resultId ? { resultId, result } : result;
-          } catch (error) {
-            errors.push(error);
-            throw error;
-          }
+          const response = await requestWithDefaults(requestOptions);
+          const result = responseGetPath ? get(responseGetPath, response) : response;
+          return resultId ? { resultId, result } : result;
         },
       requestsOptions
     );
@@ -130,10 +124,12 @@ const createRequestsInParallel =
         batch.map(fn => fn())
       );
 
-      // Collect results from this batch
+      // Collect results and errors from this batch
       batchResults.forEach(result => {
         if (result.status === 'fulfilled') {
           results.push(result.value);
+        } else {
+          errors.push(result.reason);
         }
       });
 

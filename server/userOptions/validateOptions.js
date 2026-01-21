@@ -30,7 +30,7 @@ const validateOptions = async (options, callback) => {
   if (typeof requestDelayMs !== 'number' || requestDelayMs < 0) {
     errors = errors.concat({
       key: 'requestDelayMs',
-      message: 'Must be a positive number'
+      message: 'Must be a non-negative number'
     });
   }
 

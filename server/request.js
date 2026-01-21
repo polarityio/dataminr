@@ -27,14 +27,14 @@ const sleep = (ms) => {
  * @returns {number} Delay in milliseconds
  */
 const getRetryDelay = (error, attemptNumber) => {
-  // Check for Retry-After header (in seconds)
+  // Check for x-ratelimit-reset header (in seconds)
   if (error.meta && error.meta.headers) {
-    const retryAfter = error.meta.headers['retry-after'] || error.meta.headers['Retry-After'];
+    const retryAfter = error.meta.headers['x-ratelimit-reset'];
     if (retryAfter) {
       const retryAfterSeconds = parseInt(retryAfter, 10);
       if (!isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
         // Convert to milliseconds and add a small buffer
-        return (retryAfterSeconds + 1) * 1000;
+        return (retryAfterSeconds + 1);
       }
     }
   }

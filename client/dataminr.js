@@ -434,6 +434,7 @@ class DataminrIntegration {
     this.userOptions = userOptions;
     this.pollingInterval = null;
     this.pollIntervalMs = 10000; // Poll Polarity server every 10 seconds
+    this.isPollingInProgress = false;
     this.currentUser = null;
     this.currentAlertIds = new Map(); // Map of alertId -> { id, headline, type, alertTimestamp }
     this.lastAlertTimestamp = null; // ISO timestamp of last alert
@@ -572,6 +573,17 @@ class DataminrIntegration {
         clearAllButton.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent header toggle
           this.clearAllAlerts();
+        });
+      }
+
+      // Add click handler for restart polling button
+      const restartPollingButton = dataminrContainer.querySelector(
+        '.dataminr-restart-polling-btn'
+      );
+      if (restartPollingButton) {
+        restartPollingButton.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent header toggle
+          this.restartPolling();
         });
       }
 
@@ -750,6 +762,8 @@ class DataminrIntegration {
    * @private
    */
   async pollAlerts() {
+    if (this.isPollingInProgress) return;
+    this.isPollingInProgress = true;
     try {
       // Fetch new alerts since last query timestamp
       const newAlerts = await this.getAlerts();
@@ -765,7 +779,21 @@ class DataminrIntegration {
       }
     } catch (error) {
       console.error('Error polling alerts:', error);
+
+      // Check if error is a 404 - integration has stopped
+      // Handle different error formats: error.status, error.response.status, or error.statusCode
+      const statusCode =
+        error.status ||
+        (error.response && error.response.status) ||
+        error.statusCode ||
+        (error.detail && error.detail.status);
+      if (statusCode === 404) {
+        // Stop polling and show error message
+        this.stopPolling();
+        this.showPollingError();
+      }
     }
+    this.isPollingInProgress = false;
   }
 
   /**
@@ -814,7 +842,8 @@ class DataminrIntegration {
       return [];
     } catch (error) {
       console.error('Error getting alerts:', error);
-      return [];
+      // Re-throw error so pollAlerts can handle 404s
+      throw error;
     }
   }
 
@@ -1800,6 +1829,40 @@ class DataminrIntegration {
   }
 
   /**
+   * Show polling error message
+   * @private
+   */
+  showPollingError() {
+    const errorElement = byId('dataminr-polling-error');
+    if (errorElement) {
+      errorElement.style.display = 'inline';
+    }
+  }
+
+  /**
+   * Hide polling error message
+   * @private
+   */
+  hidePollingError() {
+    const errorElement = byId('dataminr-polling-error');
+    if (errorElement) {
+      errorElement.style.display = 'none';
+    }
+  }
+
+  /**
+   * Restart polling for alerts
+   * @private
+   */
+  restartPolling() {
+    // Hide error message
+    this.hidePollingError();
+
+    // Restart polling
+    this.startPolling();
+  }
+
+  /**
    * Update the configuration options for the Dataminr available lists
    * @private
    */
@@ -2221,9 +2284,13 @@ class DataminrIntegration {
       '#dataminr-entity-details-scores-section'
     );
     const cvssItem = detailsContainer.querySelector('#dataminr-entity-details-cvss-item');
-    const cvssValue = detailsContainer.querySelector('#dataminr-entity-details-cvss-value');
+    const cvssValue = detailsContainer.querySelector(
+      '#dataminr-entity-details-cvss-value'
+    );
     const epssItem = detailsContainer.querySelector('#dataminr-entity-details-epss-item');
-    const epssValue = detailsContainer.querySelector('#dataminr-entity-details-epss-value');
+    const epssValue = detailsContainer.querySelector(
+      '#dataminr-entity-details-epss-value'
+    );
     const exploitableItem = detailsContainer.querySelector(
       '#dataminr-entity-details-exploitable-item'
     );
@@ -3038,13 +3105,14 @@ class DataminrIntegration {
             console.error('Failed to parse entity JSON data:', err);
           }
         }
-        
+
         // Fallback to individual data attributes if JSON not available
         if (!entityData) {
           const entityName = entityTrigger.getAttribute('data-entity-name') || '';
           const entityType = entityTrigger.getAttribute('data-entity-type') || '';
           const entitySummary = entityTrigger.getAttribute('data-entity-summary') || '';
-          const entityAliasesStr = entityTrigger.getAttribute('data-entity-aliases') || '';
+          const entityAliasesStr =
+            entityTrigger.getAttribute('data-entity-aliases') || '';
           const entityUrl = entityTrigger.getAttribute('data-entity-url') || '';
 
           // Parse aliases from comma-separated string

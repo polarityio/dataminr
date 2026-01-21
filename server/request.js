@@ -61,7 +61,7 @@ const getRetryDelay = (error, attemptNumber) => {
  */
 const rateLimitedRequest = async (requestFn, options) => {
   const Logger = getLogger();
-  const maxRequests = options.maxRequestsPer30Seconds || 6;
+  const maxRequests = options.maxRequestsPer30Seconds ?? 6;
   const windowMs = 30000; // 30 seconds in milliseconds
 
   const now = Date.now();
@@ -103,8 +103,8 @@ const rateLimitedRequest = async (requestFn, options) => {
     timestampCleanupIndex++;
   }
 
-  // Record this request timestamp
-  requestTimestamps.push(Date.now());
+  // Record this request timestamp (use 'now' for consistency)
+  requestTimestamps.push(now);
 
   // Execute the request
   return await requestFn();

@@ -364,20 +364,18 @@ const onMessage = async (payload, options, cb) => {
           : renderOptionsWithListIds;
 
         getAlertById(renderAlertId, renderOptionsWithListIds)
-          .then((alert) => {
+          .then(async (alert) => {
             if (!alert) {
               Logger.warn({ alertId: renderAlertId }, 'Alert not found when rendering detail');
               return cb(null, { html: '' });
             }
 
-            return renderAlertDetail(alert, renderOptionsWithTimezone)
-              .then((renderedHtml) => {
-                Logger.debug(
-                  { alertId: renderAlertId },
-                  'Rendered alert detail template'
-                );
-                cb(null, { html: renderedHtml });
-              });
+            const renderedHtml = await renderAlertDetail(alert, renderOptionsWithTimezone);
+            Logger.debug(
+              { alertId: renderAlertId },
+              'Rendered alert detail template'
+            );
+            cb(null, { html: renderedHtml });
           })
           .catch((error) => {
             const err = parseErrorToReadableJson(error);

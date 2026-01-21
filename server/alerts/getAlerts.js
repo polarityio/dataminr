@@ -5,7 +5,7 @@ const {
 
 const { requestWithDefaults } = require('../request');
 const { DEFAULT_PAGE_SIZE, ROUTE_PREFIX } = require('../../constants');
-const { getCachedAlerts } = require('./stateManager');
+const { getCachedAlertById } = require('./stateManager');
 
 const parseNextPageCursor = (nextPage) => {
   try {
@@ -169,13 +169,13 @@ const getAlertById = async (alertId, options) => {
     throw new Error('Alert ID is required');
   }
 
-  // 48 hours in milliseconds - essentially, don't filter by age when asking for a specific alert
-  const maxAge = 48 * 60 * 60 * 1000;
-  const cachedAlerts = getCachedAlerts(null, null, maxAge);
-  const cachedAlert = cachedAlerts.find((alert) => alert.alertId === alertId);
+  const listIds = options && options.listIds ? options.listIds : null;
+
+  // Check cache first (no age filtering for direct lookups)
+  const cachedAlert = getCachedAlertById(alertId);
 
   if (cachedAlert) {
-    Logger.debug({ alertId }, 'Alert found in cache');
+    Logger.debug({ alertId }, 'Alert found in cache (O(1) lookup)');
     return cachedAlert;
   }
 
@@ -183,8 +183,8 @@ const getAlertById = async (alertId, options) => {
     const queryParams = {};
 
     // Add list IDs if configured (to include match reasons)
-    if (options && options.listIds && options.listIds.length > 0) {
-      queryParams.lists = options.listIds.join(',');
+    if (listIds && listIds.length > 0) {
+      queryParams.lists = listIds.join(',');
     }
 
     const route = `${ROUTE_PREFIX}/v1/alerts/${encodeURIComponent(alertId)}`;

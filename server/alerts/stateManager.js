@@ -1,5 +1,5 @@
 const NodeCache = require('node-cache');
-const { STATE_KEY, ALERTS_KEY, LISTS_KEY, CACHE_MAX_AGE_MS } = require('../../constants');
+const { STATE_KEY, ALERTS_KEY, LISTS_KEY, ALERTS_MAP_KEY, CACHE_MAX_AGE_MS } = require('../../constants');
 
 // Cache for storing polling state
 // Key: 'pollingState', Value: { lastCursor, lastPollTime, alertCount }
@@ -8,6 +8,10 @@ const stateCache = new NodeCache({ stdTTL: 0 }); // No expiration
 // Global cache for storing all polled alerts (sorted by timestamp, newest first)
 // Key: 'alerts', Value: Array of alert objects
 const alertsCache = new NodeCache({ stdTTL: 0 }); // No expiration
+
+// Map for O(1) alert lookups by alertId
+// Key: 'alertsMap', Value: Map of alertId -> alert object
+const alertsMapCache = new NodeCache({ stdTTL: 0 }); // No expiration
 
 // Global cache for storing lists
 // Key: 'lists', Value: Array of list objects with value and display properties
@@ -67,7 +71,7 @@ const resetPollingState = () => {
  * @param {number} maxAge - Optional max age in milliseconds (default is CACHE_MAX_AGE_MS)
 * @returns {Array<Object>} Filtered array of alerts (only those within max age and after alertFilterTimestamp if provided)
  */
-const filterAlertsByAge = (alerts, alertFilterTimestamp = null, maxAge = CACHE_MAX_AGE_MS) => {
+const filterAlertsByAge = (alerts, alertFilterTimestamp = null) => {
   const now = Date.now();
 
   // Convert alertFilterTimestamp to milliseconds if provided
@@ -83,7 +87,7 @@ const filterAlertsByAge = (alerts, alertFilterTimestamp = null, maxAge = CACHE_M
     const age = now - alertTime;
 
     // Must be within max age
-    if (age > maxAge) {
+    if (age > CACHE_MAX_AGE_MS) {
       return false;
     }
 
@@ -100,12 +104,11 @@ const filterAlertsByAge = (alerts, alertFilterTimestamp = null, maxAge = CACHE_M
  * Get all cached alerts (filtered to remove alerts older than 1 hour)
  * @param {Array<string>} [listIds] - Optional array of list IDs to filter by. If provided, only returns alerts that match any of the list IDs.
  * @param {string|null} alertFilterTimestamp - Optional ISO timestamp to filter alerts (returns alerts after this timestamp)
- * @param {number} maxAge - Optional max age in milliseconds (default is CACHE_MAX_AGE_MS)
  * @returns {Array<Object>} Array of alert objects (sorted newest first)
  */
-const getCachedAlerts = (listIds = null, alertFilterTimestamp = null, maxAge = CACHE_MAX_AGE_MS) => {
+const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
   const alerts = alertsCache.get(ALERTS_KEY) || [];
-  let filteredAlerts = filterAlertsByAge(alerts, alertFilterTimestamp, maxAge);
+  let filteredAlerts = filterAlertsByAge(alerts, alertFilterTimestamp);
 
   // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
   if (listIds && listIds.length > 0) {
@@ -131,6 +134,7 @@ const getCachedAlerts = (listIds = null, alertFilterTimestamp = null, maxAge = C
 /**
  * Add alerts to the global cache
  * Alerts are kept sorted by timestamp (newest first) for efficient timestamp lookups
+ * Also maintains a Map for O(1) lookups by alertId
  * @param {Array<Object>} alerts - Array of alert objects to add (should be sorted newest first)
  * @returns {Object} Result object
  * @returns {number} returns.added - Number of new alerts added
@@ -167,8 +171,17 @@ const addAlertsToCache = (alerts) => {
   // Filter out alerts older than 1 hour
   const filteredAlerts = filterAlertsByAge(deduplicatedAlerts);
 
-  // Update cache with filtered alerts
+  // Update array cache with filtered alerts
   alertsCache.set(ALERTS_KEY, filteredAlerts);
+
+  // Update Map cache for O(1) lookups
+  const alertsMap = new Map();
+  filteredAlerts.forEach((alert) => {
+    if (alert.alertId) {
+      alertsMap.set(alert.alertId, alert);
+    }
+  });
+  alertsMapCache.set(ALERTS_MAP_KEY, alertsMap);
 
   return {
     added: alerts.length,
@@ -182,6 +195,22 @@ const addAlertsToCache = (alerts) => {
  */
 const clearCachedAlerts = () => {
   alertsCache.set(ALERTS_KEY, []);
+  alertsMapCache.set(ALERTS_MAP_KEY, new Map());
+};
+
+/**
+ * Get a single alert by ID from the cache (O(1) lookup)
+ * No age filtering - if we're asking for a specific alert, return it if it exists
+ * @param {string} alertId - Alert ID to look up
+ * @returns {Object|null} Alert object or null if not found
+ */
+const getCachedAlertById = (alertId) => {
+  if (!alertId) return null;
+
+  const alertsMap = alertsMapCache.get(ALERTS_MAP_KEY);
+  if (!alertsMap) return null;
+
+  return alertsMap.get(alertId) || null;
 };
 
 /**
@@ -226,6 +255,7 @@ module.exports = {
   updatePollingState,
   resetPollingState,
   getCachedAlerts,
+  getCachedAlertById,
   addAlertsToCache,
   clearCachedAlerts,
   getLatestAlertTimestamp,

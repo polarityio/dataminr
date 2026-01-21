@@ -16,7 +16,8 @@ const {
 const {
   getCachedAlerts,
   getLatestAlertTimestamp,
-  getCachedLists
+  getCachedLists,
+  addAlertsToCache
 } = require('./server/alerts/stateManager');
 const { getAlerts } = require('./server/alerts/getAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
@@ -97,6 +98,23 @@ const doLookup = async (entities, options, cb) => {
 
     const searchableEntities = removePrivateIps(entities);
     const alerts = await searchAlerts(searchableEntities, options);
+
+    // Cache all alerts from search results for future lookups
+    const allAlerts = [];
+    if (alerts && Array.isArray(alerts)) {
+      alerts.forEach((alertResult) => {
+        if (alertResult && alertResult.result && Array.isArray(alertResult.result)) {
+          allAlerts.push(...alertResult.result);
+        }
+      });
+      if (allAlerts.length > 0) {
+        addAlertsToCache(allAlerts);
+        Logger.debug(
+          { alertCount: allAlerts.length },
+          'Cached alerts from search results'
+        );
+      }
+    }
 
     Logger.trace({ alerts, searchableEntities });
 
@@ -276,6 +294,15 @@ const onMessage = async (payload, options, cb) => {
                 pageSize: alertCount
               });
 
+              // Cache the fetched alerts for future lookups
+              if (apiAlerts && apiAlerts.length > 0) {
+                addAlertsToCache(apiAlerts);
+                Logger.debug(
+                  { alertCount: apiAlerts.length },
+                  'Cached alerts from alertCount query'
+                );
+              }
+
               // Filter API alerts by alert type
               // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count
               alerts = apiAlerts.filter(alertTypeFilter);
@@ -328,9 +355,11 @@ const onMessage = async (payload, options, cb) => {
         getAlertById(requestedAlertId, optionsWithListIds)
           .then((alert) => {
             if (alert) {
+              // Cache the fetched alert for future lookups
+              addAlertsToCache([alert]);
               Logger.debug(
                 { alertId: requestedAlertId },
-                'Retrieved alert by ID from API'
+                'Retrieved and cached alert by ID from API'
               );
               cb(null, { alert });
             } else {

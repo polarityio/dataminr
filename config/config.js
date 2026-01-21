@@ -69,6 +69,24 @@ module.exports = {
       type: 'password',
       userCanEdit: false,
       adminOnly: true
+    },
+    {
+      key: 'maxConcurrentRequests',
+      name: 'Max Concurrent Requests',
+      description: 'Maximum number of concurrent requests to send to the Dataminr API at once. Should not exceed your rate limit (default: 6 requests per 30 seconds).',
+      default: 5,
+      type: 'number',
+      userCanEdit: false,
+      adminOnly: true
+    },
+    {
+      key: 'requestDelayMs',
+      name: 'Request Delay (milliseconds)',
+      description: 'Delay in milliseconds between batches of requests to respect rate limits. Recommended: 5000ms (5 seconds) to stay within 6 requests per 30 seconds.',
+      default: 5000,
+      type: 'number',
+      userCanEdit: false,
+      adminOnly: true
     }
   ]
 };

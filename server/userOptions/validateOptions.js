@@ -14,7 +14,25 @@ const validateOptions = async (options, callback) => {
 
   const urlValidationError = validateUrlOption(options, 'url');
 
-  const errors = stringValidationErrors.concat(urlValidationError);
+  let errors = stringValidationErrors.concat(urlValidationError);
+
+  // Validate maxConcurrentRequests
+  const maxConcurrentRequests = options.maxConcurrentRequests.value;
+  if (typeof maxConcurrentRequests !== 'number' || maxConcurrentRequests < 1 || maxConcurrentRequests > 10) {
+    errors = errors.concat({
+      key: 'maxConcurrentRequests',
+      message: 'Must be a number between 1 and 10'
+    });
+  }
+
+  // Validate requestDelayMs
+  const requestDelayMs = options.requestDelayMs.value;
+  if (typeof requestDelayMs !== 'number' || requestDelayMs < 0) {
+    errors = errors.concat({
+      key: 'requestDelayMs',
+      message: 'Must be a positive number'
+    });
+  }
 
   callback(null, errors);
 };

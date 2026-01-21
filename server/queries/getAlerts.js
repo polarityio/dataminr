@@ -27,7 +27,14 @@ const getAlerts = async (entities, options) => {
       entities
     );
 
-    const alerts = await requestsInParallel(alertsRequests, 'body.data.alerts');
+    const alerts = await requestsInParallel(
+      alertsRequests, 
+      'body.data.alerts',
+      {
+        maxConcurrentRequests: options.maxConcurrentRequests,
+        requestDelayMs: options.requestDelayMs
+      }
+    );
 
     return alerts;
   } catch (error) {

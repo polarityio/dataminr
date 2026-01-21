@@ -1,5 +1,5 @@
 const { map, get, getOr, filter, flow, negate, isEmpty } = require('lodash/fp');
-const { parallelLimit } = require('async');
+const { queue } = require('async');
 
 const {
   logging: { getLogger },
@@ -94,20 +94,59 @@ const createRequestsInParallel =
   async (
     requestsOptions,
     responseGetPath,
-    limit = 10,
+    options = {},
     onlyReturnPopulatedResults = true
   ) => {
+    // Extract rate limiting options with defaults
+    const maxConcurrentRequests = options.maxConcurrentRequests || 5;
+    const requestDelayMs = options.requestDelayMs || 5000;
+
+    const results = [];
+    const errors = [];
+
+    // Create unexecuted request functions
     const unexecutedRequestFunctions = map(
       ({ resultId, ...requestOptions }) =>
         async () => {
-          const response = await requestWithDefaults(requestOptions);
-          const result = responseGetPath ? get(responseGetPath, response) : response;
-          return resultId ? { resultId, result } : result;
+          try {
+            const response = await requestWithDefaults(requestOptions);
+            const result = responseGetPath ? get(responseGetPath, response) : response;
+            return resultId ? { resultId, result } : result;
+          } catch (error) {
+            errors.push(error);
+            throw error;
+          }
         },
       requestsOptions
     );
 
-    const results = await parallelLimit(unexecutedRequestFunctions, limit);
+    // Process requests in batches
+    const totalRequests = unexecutedRequestFunctions.length;
+    for (let i = 0; i < totalRequests; i += maxConcurrentRequests) {
+      const batch = unexecutedRequestFunctions.slice(i, i + maxConcurrentRequests);
+      
+      // Process batch concurrently
+      const batchResults = await Promise.allSettled(
+        batch.map(fn => fn())
+      );
+
+      // Collect results from this batch
+      batchResults.forEach(result => {
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        }
+      });
+
+      // Add delay before next batch (but not after the last batch)
+      if (i + maxConcurrentRequests < totalRequests) {
+        await new Promise(resolve => setTimeout(resolve, requestDelayMs));
+      }
+    }
+
+    // If there were any errors, throw the first one to maintain existing error handling
+    if (errors.length > 0) {
+      throw errors[0];
+    }
 
     return onlyReturnPopulatedResults
       ? filter(

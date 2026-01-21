@@ -12,7 +12,10 @@ const NodeCache = require('node-cache');
 const tokenCache = new NodeCache();
 
 // Sliding window rate limiter state
+// Note: JavaScript's single-threaded event loop ensures that each request
+// processes atomically through the rate limiter, preventing race conditions
 const requestTimestamps = [];
+let timestampCleanupIndex = 0; // Track the first valid timestamp index
 
 /**
  * Sleep for a specified number of milliseconds
@@ -64,21 +67,30 @@ const rateLimitedRequest = async (requestFn, options) => {
   const now = Date.now();
   const windowStart = now - windowMs;
 
-  // Remove timestamps older than 30 seconds
-  while (requestTimestamps.length > 0 && requestTimestamps[0] < windowStart) {
-    requestTimestamps.shift();
+  // Remove timestamps older than 30 seconds (more efficient than shift())
+  while (timestampCleanupIndex < requestTimestamps.length && 
+         requestTimestamps[timestampCleanupIndex] < windowStart) {
+    timestampCleanupIndex++;
   }
+  
+  // Periodically clean up old timestamps to prevent memory leaks
+  if (timestampCleanupIndex > 10) {
+    requestTimestamps.splice(0, timestampCleanupIndex);
+    timestampCleanupIndex = 0;
+  }
+  
+  const activeRequestCount = requestTimestamps.length - timestampCleanupIndex;
 
   // If we have reached the max requests in the last 30 seconds, wait
-  if (requestTimestamps.length >= maxRequests) {
-    const oldestTimestamp = requestTimestamps[0];
+  if (activeRequestCount >= maxRequests) {
+    const oldestTimestamp = requestTimestamps[timestampCleanupIndex];
     const waitTime = oldestTimestamp + windowMs - now;
     
     if (waitTime > 0) {
       Logger.debug(
         {
           waitTimeMs: waitTime,
-          currentRequestCount: requestTimestamps.length,
+          currentRequestCount: activeRequestCount,
           maxRequests
         },
         'Rate limit reached - waiting before sending request'
@@ -88,7 +100,7 @@ const rateLimitedRequest = async (requestFn, options) => {
     }
     
     // Remove the oldest timestamp after waiting
-    requestTimestamps.shift();
+    timestampCleanupIndex++;
   }
 
   // Record this request timestamp

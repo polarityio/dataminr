@@ -16,7 +16,8 @@ const {
 const {
   getCachedAlerts,
   getLatestAlertTimestamp,
-  getCachedLists
+  getCachedLists,
+  addAlertsToCache
 } = require('./server/alerts/stateManager');
 const { getAlerts } = require('./server/alerts/getAlerts');
 const { setLogger: setRequestLogger } = require('./server/request');
@@ -275,6 +276,20 @@ const onMessage = async (payload, options, cb) => {
                 listIds: listIds,
                 pageSize: alertCount
               });
+
+              // Cache the alerts fetched from API so they're available for subsequent lookups
+              if (apiAlerts && apiAlerts.length > 0) {
+                try {
+                  addAlertsToCache(apiAlerts);
+                  Logger.debug(
+                    { alertCount: apiAlerts.length },
+                    'Alerts from search query added to cache'
+                  );
+                } catch (cacheError) {
+                  // Log but don't fail if caching fails
+                  Logger.warn({ cacheError }, 'Failed to cache alerts from search query');
+                }
+              }
 
               // Filter API alerts by alert type
               // Note: Since we currently filter by alert type after getAlerts, we could have less than the requested count

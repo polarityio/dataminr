@@ -47,17 +47,18 @@ The interval in seconds for the server to poll for new Alerts
 - Minimum: `30` seconds
 - Admin Only: Yes
 
-### Max Requests Per 30 Seconds
-Maximum number of requests allowed within any 30-second window (default: 6). This setting implements a sliding window rate limiter to prevent 429 (Too Many Requests) errors from the Dataminr API.
+## Rate Limiting
+
+The integration implements automatic rate limiting based on the Dataminr API's response headers. This prevents 429 (Too Many Requests) errors without requiring manual configuration.
 
 **How it works:**
-- The integration tracks all API requests made in the last 30 seconds
-- Before sending a new request, it checks if the limit has been reached
-- If the limit would be exceeded, the integration automatically waits until the oldest request is more than 30 seconds old
-- Allows bursting: you can send all 6 requests immediately if needed
-- Example: If you send 6 requests at once, you must wait 30 seconds before the 7th request is sent
+- Starts with sane defaults: 6 requests per 30-second window
+- Monitors `x-ratelimit-limit`, `x-ratelimit-remaining`, and `x-ratelimit-reset` headers from every API response
+- Automatically adjusts rate limiting based on the actual API limits
+- Waits when quota is exhausted, using the API's `x-ratelimit-reset` value for precise timing
+- No user configuration needed - the integration adapts to the API's rate limits automatically
 
-**Note:** This rate limiter is applied only to Dataminr API calls, not to authentication token requests. The recommended value is 6 to match Dataminr's default API rate limit.
+**Note:** Rate limiting is applied only to Dataminr API calls, not to authentication token requests.
 
 ## Installation Instructions
 

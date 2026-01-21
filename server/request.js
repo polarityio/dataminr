@@ -11,11 +11,13 @@ const { DateTime } = require('luxon');
 const NodeCache = require('node-cache');
 const tokenCache = new NodeCache();
 
-// Sliding window rate limiter state
-// Note: JavaScript's single-threaded event loop ensures that each request
-// processes atomically through the rate limiter, preventing race conditions
-const requestTimestamps = [];
-let timestampCleanupIndex = 0; // Track the first valid timestamp index
+// Rate limiter state - tracks API rate limit info from response headers
+const rateLimitState = {
+  limit: 6, // Default: 6 requests per window
+  remaining: 6, // Default: start with full quota
+  resetAt: null, // Timestamp when rate limit resets
+  windowMs: 30000 // Default: 30 second window
+};
 
 /**
  * Sleep for a specified number of milliseconds
@@ -27,87 +29,95 @@ const sleep = (ms) => {
 };
 
 /**
- * Extract retry delay from error response headers or use exponential backoff
- * @param {Object} error - The error object
- * @param {number} attemptNumber - Current retry attempt (0-indexed)
- * @returns {number} Delay in milliseconds
+ * Update rate limit state from response headers
+ * @param {Object} response - HTTP response object
+ * @returns {void}
  */
-const getRetryDelay = (error, attemptNumber) => {
-  // Check for Retry-After header (in seconds)
-  if (error.meta && error.meta.headers) {
-    const retryAfter = error.meta.headers['retry-after'] || error.meta.headers['Retry-After'];
-    if (retryAfter) {
-      const retryAfterSeconds = parseInt(retryAfter, 10);
-      if (!isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
-        // Convert to milliseconds and add a small buffer
-        return (retryAfterSeconds + 1) * 1000;
-      }
-    }
+const updateRateLimitFromHeaders = (response) => {
+  const Logger = getLogger();
+  const headers = response.headers || {};
+  
+  const limit = headers['x-ratelimit-limit'];
+  const remaining = headers['x-ratelimit-remaining'];
+  const reset = headers['x-ratelimit-reset'];
+  
+  if (limit !== undefined) {
+    rateLimitState.limit = parseInt(limit, 10);
   }
-
-  // Exponential backoff: 2^attemptNumber seconds, with a max of 60 seconds
-  // Attempt 0: 1s, Attempt 1: 2s, Attempt 2: 4s, Attempt 3: 8s, etc.
-  const baseDelay = Math.min(Math.pow(2, attemptNumber), 60) * 1000;
-  return baseDelay;
+  
+  if (remaining !== undefined) {
+    rateLimitState.remaining = parseInt(remaining, 10);
+  }
+  
+  if (reset !== undefined) {
+    const resetMs = parseInt(reset, 10);
+    rateLimitState.resetAt = Date.now() + resetMs;
+  }
+  
+  Logger.trace(
+    {
+      limit: rateLimitState.limit,
+      remaining: rateLimitState.remaining,
+      resetAt: rateLimitState.resetAt,
+      resetIn: rateLimitState.resetAt ? rateLimitState.resetAt - Date.now() : null
+    },
+    'Updated rate limit state from response headers'
+  );
 };
 
 /**
- * Implements a sliding window rate limiter to prevent exceeding API rate limits.
- * Ensures no more than maxRequests are sent within any 30-second window.
- * 
- * @param {Function} requestFn - The async function to execute (makes the actual request)
- * @param {Object} options - User options containing maxRequestsPer30Seconds
- * @returns {Promise} - Result of the request function
+ * Check if we should wait before making a request based on rate limit state
+ * @returns {Promise<void>} Resolves after waiting if necessary
  */
-const rateLimitedRequest = async (requestFn, options) => {
+const checkRateLimit = async () => {
   const Logger = getLogger();
-  const maxRequests = options.maxRequestsPer30Seconds ?? 6;
-  const windowMs = 30000; // 30 seconds in milliseconds
-
   const now = Date.now();
-  const windowStart = now - windowMs;
-
-  // Remove timestamps older than 30 seconds (more efficient than shift())
-  while (timestampCleanupIndex < requestTimestamps.length && 
-         requestTimestamps[timestampCleanupIndex] < windowStart) {
-    timestampCleanupIndex++;
+  
+  // Check if rate limit has reset
+  if (rateLimitState.resetAt && now >= rateLimitState.resetAt) {
+    Logger.trace('Rate limit window has reset');
+    rateLimitState.remaining = rateLimitState.limit;
+    rateLimitState.resetAt = null;
   }
   
-  // Periodically clean up old timestamps to prevent memory leaks
-  if (timestampCleanupIndex > 10) {
-    requestTimestamps.splice(0, timestampCleanupIndex);
-    timestampCleanupIndex = 0;
+  // If we have remaining quota, proceed
+  if (rateLimitState.remaining > 0) {
+    // Optimistically decrement (will be corrected by response headers)
+    rateLimitState.remaining--;
+    return;
   }
   
-  const activeRequestCount = requestTimestamps.length - timestampCleanupIndex;
-
-  // If we have reached the max requests in the last 30 seconds, wait
-  if (activeRequestCount >= maxRequests) {
-    const oldestTimestamp = requestTimestamps[timestampCleanupIndex];
-    const waitTime = oldestTimestamp + windowMs - now;
+  // No quota remaining - wait until reset
+  if (rateLimitState.resetAt && rateLimitState.resetAt > now) {
+    const waitTime = rateLimitState.resetAt - now;
+    Logger.warn(
+      {
+        waitTimeMs: waitTime,
+        resetAt: new Date(rateLimitState.resetAt).toISOString(),
+        limit: rateLimitState.limit
+      },
+      'Rate limit exhausted - waiting until reset'
+    );
+    await sleep(waitTime);
     
-    if (waitTime > 0) {
-      Logger.debug(
-        {
-          waitTimeMs: waitTime,
-          currentRequestCount: activeRequestCount,
-          maxRequests
-        },
-        'Rate limit reached - waiting before sending request'
-      );
-      
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
+    // After waiting, reset the quota
+    rateLimitState.remaining = rateLimitState.limit;
+    rateLimitState.resetAt = null;
+  } else if (rateLimitState.remaining === 0) {
+    // No reset time known, use default window
+    const waitTime = rateLimitState.windowMs;
+    Logger.warn(
+      {
+        waitTimeMs: waitTime,
+        limit: rateLimitState.limit
+      },
+      'Rate limit exhausted with no reset time - waiting default window'
+    );
+    await sleep(waitTime);
     
-    // Remove the oldest timestamp after waiting
-    timestampCleanupIndex++;
+    // Reset quota after default wait
+    rateLimitState.remaining = rateLimitState.limit;
   }
-
-  // Record this request timestamp (use 'now' for consistency)
-  requestTimestamps.push(now);
-
-  // Execute the request
-  return await requestFn();
 };
 
 // Single request instance for all HTTP requests
@@ -232,8 +242,11 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
   let lastError;
   let attemptNumber = 0;
 
-  // Wrap the request execution in rate limiter
+  // Wrap the request execution with rate limiting
   const executeRequest = async () => {
+    // Check rate limit before making request
+    await checkRateLimit();
+    
     while (attemptNumber <= maxRetries) {
       try {
         const response = await request.run({
@@ -247,9 +260,17 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
           json: true
         });
 
+        // Update rate limit state from response headers
+        updateRateLimitFromHeaders(response);
+
         return response;
       } catch (error) {
         lastError = error;
+
+        // Update rate limit state from error response headers if available
+        if (error.meta && error.meta.headers) {
+          updateRateLimitFromHeaders({ headers: error.meta.headers });
+        }
 
         // Check if it's a 401 authentication error
         const errorStatus = error.status || error.statusCode || (error.meta && error.meta.statusCode);
@@ -290,7 +311,10 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
           (errorStatus === '429' || errorStatus === 429 || String(error.message || error.detail || '').includes('429'));
 
         if (isRateLimitError && attemptNumber < maxRetries) {
-          const retryDelay = getRetryDelay(error, attemptNumber);
+          // Use x-ratelimit-reset from headers if available
+          const resetMs = error.meta?.headers?.['x-ratelimit-reset'];
+          const retryDelay = resetMs ? parseInt(resetMs, 10) : Math.min(Math.pow(2, attemptNumber), 60) * 1000;
+          
           Logger.warn(
             { route, attemptNumber: attemptNumber + 1, maxRetries, retryDelayMs: retryDelay },
             'Rate limit (429) encountered, retrying request'
@@ -317,8 +341,7 @@ const requestWithDefaults = async ({ route, options, maxRetries = 3, ...requestO
     throw lastError;
   };
 
-  // Apply rate limiting to the entire request execution (including retries)
-  return await rateLimitedRequest(executeRequest, options);
+  return await executeRequest();
 };
 
 /**

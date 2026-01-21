@@ -154,16 +154,6 @@
           "value": 30
         }
       ]
-    },
-    {
-      "key": "maxRequestsPer30Seconds",
-      "name": "Max Requests Per 30 Seconds",
-      "description":
-        "Maximum number of requests allowed within any 30-second window (Dataminr default: 6)",
-      "default": 6,
-      "type": "number",
-      "userCanEdit": false,
-      "adminOnly": true
     }
   ]
 }

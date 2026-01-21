@@ -1,6 +1,6 @@
 {
   "name": "dataminr-pulse",
-  "version": "3.1.19",
+  "version": "3.1.19-test.1",
   "main": "./integration.js",
   "private": true,
   "dependencies": {

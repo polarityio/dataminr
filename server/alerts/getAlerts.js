@@ -164,17 +164,14 @@ const getAlerts = async (
  */
 const getAlertById = async (alertId, options) => {
   const Logger = getLogger();
-  let listIds = null;
 
   if (!alertId) {
     throw new Error('Alert ID is required');
   }
 
-  if (options && options.listIds) {
-    listIds = options.listIds;
-  }
-
-  const cachedAlerts = getCachedAlerts(listIds);
+  // 48 hours in milliseconds - essentially, don't filter by age when asking for a specific alert
+  const maxAge = 48 * 60 * 60 * 1000;
+  const cachedAlerts = getCachedAlerts(null, null, maxAge);
   const cachedAlert = cachedAlerts.find((alert) => alert.alertId === alertId);
 
   if (cachedAlert) {
@@ -186,8 +183,8 @@ const getAlertById = async (alertId, options) => {
     const queryParams = {};
 
     // Add list IDs if configured (to include match reasons)
-    if (listIds && listIds.length > 0) {
-      queryParams.lists = listIds.join(',');
+    if (options && options.listIds && options.listIds.length > 0) {
+      queryParams.lists = options.listIds.join(',');
     }
 
     const route = `${ROUTE_PREFIX}/v1/alerts/${encodeURIComponent(alertId)}`;

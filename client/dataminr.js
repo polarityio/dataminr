@@ -435,9 +435,7 @@ class DataminrIntegration {
     this.pollingInterval = null;
     this.pollIntervalMs = 10000; // Poll Polarity server every 10 seconds
     this.currentUser = null;
-    this.currentAlertCache = new Map(); // Map of alertId -> full alert object (# macCacheSize)
     this.currentAlertIds = new Map(); // Map of alertId -> { id, headline, type, alertTimestamp }
-    this.maxCacheSize = 100;
     this.lastAlertTimestamp = null; // ISO timestamp of last alert
     this.maxVisibleTags = 10; // Maximum number of visible alert tags to display
     this.currentFilter = null; // Current alert type filter: null (all), 'Flash', 'Urgent', or 'Alert'
@@ -826,9 +824,6 @@ class DataminrIntegration {
    */
   clearAllAlerts() {
     // Clear the alerts maps
-    if (this.currentAlertCache) {
-      this.currentAlertCache.clear();
-    }
     if (this.currentAlertIds) {
       this.currentAlertIds.clear();
     }
@@ -910,24 +905,6 @@ class DataminrIntegration {
 
       // If detail container doesn't exist, create it dynamically
       if (!detailContainer) {
-        let alert = this.currentAlertCache.get(alertId);
-
-        // If not in cache, fetch full alert data
-        if (!alert) {
-          try {
-            alert = await this.getAlertById(alertId);
-            if (alert) {
-              this.processNewAlert(alert);
-            }
-          } catch (e) {
-            console.error('Error fetching alert details:', e);
-          }
-        }
-
-        if (!alert) {
-          return;
-        }
-
         // Get or create the details container
         const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
 
@@ -945,8 +922,13 @@ class DataminrIntegration {
         detailContainer.className = 'dataminr-alert-detail';
         detailContainer.setAttribute('data-alert-id', alertId);
 
-        // Build detail HTML (async)
-        const detailHtml = await this.buildAlertDetailHtml(alert);
+        // Build detail HTML (backend will fetch alert from its cache)
+        const detailHtml = await this.buildAlertDetailHtml(alertId);
+
+        // If no HTML returned, alert might not exist
+        if (!detailHtml) {
+          return;
+        }
 
         // Extract only the dataminr-alert-detail-content element to avoid extra containers from block.hbs
         const tempDiv = document.createElement('div');
@@ -970,18 +952,8 @@ class DataminrIntegration {
         }
       }
 
+      this.hideAllDetails();
       if (detailContainer) {
-        // Hide entity details for all other alert details before showing this one
-        const dataminrDetailsContainer = this.getDataminrDetailsContainerForIntegration();
-        if (dataminrDetailsContainer) {
-          const allAlertDetails = qsa('.dataminr-alert-detail', dataminrDetailsContainer);
-          allAlertDetails.forEach((alertDetail) => {
-            if (alertDetail !== detailContainer) {
-              this.hideEntityDetails(alertDetail);
-            }
-          });
-        }
-
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
 
@@ -1034,7 +1006,6 @@ class DataminrIntegration {
     }
 
     this.deactivateAllTagButtons();
-    this.hideAllDetails();
     button.classList.add('active');
     this.showDetail(alertId);
   }
@@ -1171,9 +1142,6 @@ class DataminrIntegration {
 
     try {
       // Remove alert from current alerts maps
-      if (this.currentAlertCache) {
-        this.currentAlertCache.delete(alertId);
-      }
       if (this.currentAlertIds) {
         this.currentAlertIds.delete(alertId);
       }
@@ -1411,20 +1379,20 @@ class DataminrIntegration {
   /**
    * Build HTML for alert detail container using backend template
    * @private
-   * @param {Object} alert - Alert object
+   * @param {string} alertId - Alert ID
    * @returns {Promise<string>} HTML string for alert details
    */
-  async buildAlertDetailHtml(alert) {
-    if (!alert) return '';
+  async buildAlertDetailHtml(alertId) {
+    if (!alertId) return '';
 
     try {
       // Get browser timezone
       const timezone = this.getBrowserTimezone();
 
-      // Request rendered HTML from backend
+      // Request rendered HTML from backend (backend will fetch alert from its cache)
       const payload = {
         action: 'renderAlertDetail',
-        alert: alert
+        alertId: alertId
       };
 
       // Add timezone to payload if available
@@ -1791,7 +1759,6 @@ class DataminrIntegration {
             tagButton.classList.add('active');
           }
 
-          this.hideAllDetails();
           this.showDetail(alertId);
         }, 100);
       } else {
@@ -3130,24 +3097,8 @@ class DataminrIntegration {
         e.stopPropagation();
         const linkedAlertId = linkedAlertItem.getAttribute('data-linked-alert-id');
         if (linkedAlertId) {
-          // Get the alert from currentAlertCache or fetch it
-          const linkedAlert = this.currentAlertCache.get(linkedAlertId);
-          if (linkedAlert) {
-            // Alert already in cache, show it
-            this.hideAllDetails();
-            this.showDetail(linkedAlertId);
-          } else {
-            // Fetch the alert and then show it
-            this.getAlertById(linkedAlertId).then((alert) => {
-              if (alert) {
-                // Store alert in maps
-                this.processNewAlert(alert);
-                // Show the detail
-                this.hideAllDetails();
-                this.showDetail(linkedAlertId);
-              }
-            });
-          }
+          // Show the detail (backend will fetch from its cache)
+          this.showDetail(linkedAlertId);
         }
         return;
       }
@@ -3164,18 +3115,6 @@ class DataminrIntegration {
 
     const alertId = alert.alertId;
     if (!alertId) return;
-
-    // Keeping older alerts from poll (top of notifications)
-    if (!poll || this.currentAlertCache.size < this.maxCacheSize) {
-      // Add to full alert cache
-      this.currentAlertCache.set(alertId, alert);
-
-      // Enforce cache limit (remove oldest if > maxCacheSize)
-      if (this.currentAlertCache.size > this.maxCacheSize) {
-        const firstKey = this.currentAlertCache.keys().next().value;
-        this.currentAlertCache.delete(firstKey);
-      }
-    }
 
     // Add to lightweight IDs map
     this.currentAlertIds.set(alertId, {

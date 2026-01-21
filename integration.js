@@ -353,28 +353,36 @@ const onMessage = async (payload, options, cb) => {
 
       case 'renderAlertDetail':
         // Render alert detail HTML using handlebars template
-        const { alert: alertToRender, timezone: payloadTimezone } = payload;
-        if (!alertToRender) {
-          return cb({ detail: 'Missing alert in payload' });
+        // Fetch alert from backend cache (or API if not cached) and render
+        const { alertId: renderAlertId, timezone: renderTimezone } = payload;
+        if (!renderAlertId) {
+          return cb({ detail: 'Missing alertId in payload' });
         }
+        const renderOptionsWithListIds = { ...options, listIds: listIds };
+        const renderOptionsWithTimezone = renderTimezone
+          ? Object.assign({}, renderOptionsWithListIds, { timezone: renderTimezone })
+          : renderOptionsWithListIds;
 
-        // Merge timezone from payload into options if provided
-        const optionsWithTimezone = payloadTimezone
-          ? Object.assign({}, options, { timezone: payloadTimezone })
-          : options;
+        getAlertById(renderAlertId, renderOptionsWithListIds)
+          .then((alert) => {
+            if (!alert) {
+              Logger.warn({ alertId: renderAlertId }, 'Alert not found when rendering detail');
+              return cb(null, { html: '' });
+            }
 
-        renderAlertDetail(alertToRender, optionsWithTimezone)
-          .then((renderedHtml) => {
-            Logger.debug(
-              { alertId: alertToRender.alertId },
-              'Rendered alert detail template'
-            );
-            cb(null, { html: renderedHtml });
+            return renderAlertDetail(alert, renderOptionsWithTimezone)
+              .then((renderedHtml) => {
+                Logger.debug(
+                  { alertId: renderAlertId },
+                  'Rendered alert detail template'
+                );
+                cb(null, { html: renderedHtml });
+              });
           })
           .catch((error) => {
             const err = parseErrorToReadableJson(error);
             Logger.error(
-              { error, formattedError: err, alertId: alertToRender.alertId },
+              { error, formattedError: err, alertId: renderAlertId },
               'Failed to render alert detail template'
             );
             cb({

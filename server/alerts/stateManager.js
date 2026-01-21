@@ -64,11 +64,11 @@ const resetPollingState = () => {
  * Optionally also filter by alertFilterTimestamp if provided
  * @param {Array<Object>} alerts - Array of alert objects
  * @param {string|null} alertFilterTimestamp - Optional ISO timestamp to filter alerts (returns alerts after this timestamp)
- * @returns {Array<Object>} Filtered array of alerts (only those within max age and after alertFilterTimestamp if provided)
+ * @param {number} maxAge - Optional max age in milliseconds (default is CACHE_MAX_AGE_MS)
+* @returns {Array<Object>} Filtered array of alerts (only those within max age and after alertFilterTimestamp if provided)
  */
-const filterAlertsByAge = (alerts, alertFilterTimestamp = null) => {
+const filterAlertsByAge = (alerts, alertFilterTimestamp = null, maxAge = CACHE_MAX_AGE_MS) => {
   const now = Date.now();
-  const maxAge = CACHE_MAX_AGE_MS;
 
   // Convert alertFilterTimestamp to milliseconds if provided
   const filterTimestamp = alertFilterTimestamp
@@ -99,11 +99,13 @@ const filterAlertsByAge = (alerts, alertFilterTimestamp = null) => {
 /**
  * Get all cached alerts (filtered to remove alerts older than 1 hour)
  * @param {Array<string>} [listIds] - Optional array of list IDs to filter by. If provided, only returns alerts that match any of the list IDs.
+ * @param {string|null} alertFilterTimestamp - Optional ISO timestamp to filter alerts (returns alerts after this timestamp)
+ * @param {number} maxAge - Optional max age in milliseconds (default is CACHE_MAX_AGE_MS)
  * @returns {Array<Object>} Array of alert objects (sorted newest first)
  */
-const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
+const getCachedAlerts = (listIds = null, alertFilterTimestamp = null, maxAge = CACHE_MAX_AGE_MS) => {
   const alerts = alertsCache.get(ALERTS_KEY) || [];
-  let filteredAlerts = filterAlertsByAge(alerts, alertFilterTimestamp);
+  let filteredAlerts = filterAlertsByAge(alerts, alertFilterTimestamp, maxAge);
 
   // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
   if (listIds && listIds.length > 0) {

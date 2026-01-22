@@ -5,7 +5,7 @@ const {
 
 const { requestWithDefaults } = require('../request');
 const { DEFAULT_PAGE_SIZE, ROUTE_PREFIX } = require('../../constants');
-const { getCachedAlertById } = require('./stateManager');
+const { getCachedAlertById, addAlertsToCache } = require('./stateManager');
 
 const parseNextPageCursor = (nextPage) => {
   try {
@@ -175,7 +175,7 @@ const getAlertById = async (alertId, options) => {
   const cachedAlert = getCachedAlertById(alertId);
 
   if (cachedAlert) {
-    Logger.debug({ alertId }, 'Alert found in cache (O(1) lookup)');
+    Logger.debug({ alertId }, 'Alert found in cache lookup)');
     return cachedAlert;
   }
 
@@ -228,11 +228,12 @@ const getAlertById = async (alertId, options) => {
     // The API can return the alert in two formats:
     // 1. Wrapped in an AlertResponse object with an alerts array: { alerts: [alert] }
     // 2. Directly as an alert object: { alertId: "...", headline: "...", ... }
+    let alert = null;
     if (response.body) {
       // Check if it's wrapped in an alerts array (AlertResponse format)
       if (response.body.alerts && Array.isArray(response.body.alerts)) {
         if (response.body.alerts.length > 0) {
-          return response.body.alerts[0];
+          alert = response.body.alerts[0];
         } else {
           Logger.warn(
             { alertId, responseBody: response.body },
@@ -240,12 +241,22 @@ const getAlertById = async (alertId, options) => {
           );
           return null;
         }
+      } else if (response.body.alertId) {
+        // Check if it's a direct alert object (has alertId property)
+        alert = response.body;
       }
+    }
 
-      // Check if it's a direct alert object (has alertId property)
-      if (response.body.alertId) {
-        return response.body;
+    // Cache the alert if we successfully retrieved it
+    if (alert) {
+      try {
+        addAlertsToCache([alert]);
+        Logger.debug({ alertId }, 'Alert added to cache after API fetch');
+      } catch (cacheError) {
+        // Log but don't fail if caching fails
+        Logger.warn({ alertId, cacheError }, 'Failed to cache alert after fetch');
       }
+      return alert;
     }
 
     Logger.warn(

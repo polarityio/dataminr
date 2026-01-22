@@ -3,19 +3,23 @@ const { STATE_KEY, ALERTS_KEY, LISTS_KEY, ALERTS_MAP_KEY, CACHE_MAX_AGE_MS } = r
 
 // Cache for storing polling state
 // Key: 'pollingState', Value: { lastCursor, lastPollTime, alertCount }
-const stateCache = new NodeCache({ stdTTL: 0 }); // No expiration
+// checkperiod: 0 disables automatic expiry checks (we handle expiry manually)
+const stateCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 // Global cache for storing all polled alerts (sorted by timestamp, newest first)
 // Key: 'alerts', Value: Array of alert objects
-const alertsCache = new NodeCache({ stdTTL: 0 }); // No expiration
+// checkperiod: 0 disables automatic expiry checks (we handle expiry manually)
+const alertsCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 // Map for O(1) alert lookups by alertId
 // Key: 'alertsMap', Value: Map of alertId -> alert object
-const alertsMapCache = new NodeCache({ stdTTL: 0 }); // No expiration
+// checkperiod: 0 disables automatic expiry checks (we handle expiry manually)
+const alertsMapCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 // Global cache for storing lists
 // Key: 'lists', Value: Array of list objects with value and display properties
-const listsCache = new NodeCache({ stdTTL: 0 }); // No expiration
+// checkperiod: 0 disables automatic expiry checks (we handle expiry manually)
+const listsCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 /**
  * Get the current polling state

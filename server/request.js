@@ -9,7 +9,8 @@ const {
 const { DateTime } = require('luxon');
 
 const NodeCache = require('node-cache');
-const tokenCache = new NodeCache();
+// Token cache: TTL handled by token expiration, disable automatic checks
+const tokenCache = new NodeCache({ checkperiod: 0 });
 
 // Rate limiter state - tracks API rate limit info from response headers
 const rateLimitState = {

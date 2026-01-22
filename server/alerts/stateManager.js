@@ -136,31 +136,45 @@ const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
     }
   }
   
-  // Filter by timestamp if provided
+  // Convert timestamp filter to number once (avoid Date creation in loop)
+  let filterTimestampMs = null;
   if (alertFilterTimestamp) {
-    const filterTimestamp = new Date(alertFilterTimestamp).getTime();
-    filteredAlerts = filteredAlerts.filter((alert) => {
-      if (!alert.alertTimestamp) return false;
-      const alertTime = new Date(alert.alertTimestamp).getTime();
-      return alertTime > filterTimestamp;
-    });
+    filterTimestampMs = new Date(alertFilterTimestamp).getTime();
   }
-
-  // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
-  if (listIds && listIds.length > 0) {
+  
+  // Convert listIds to Set for O(1) lookup
+  const listIdsSet = listIds && listIds.length > 0 ? new Set(listIds) : null;
+  
+  // Single-pass filter for both timestamp and listIds
+  if (filterTimestampMs !== null || listIdsSet !== null) {
     filteredAlerts = filteredAlerts.filter((alert) => {
-      // Check if alert has listsMatched and if any match the requested listIds
-      if (!alert.listsMatched || !Array.isArray(alert.listsMatched)) {
-        return false;
+      // Check timestamp if filter provided
+      if (filterTimestampMs !== null) {
+        if (!alert.alertTimestamp) return false;
+        const alertTime = new Date(alert.alertTimestamp).getTime();
+        if (alertTime <= filterTimestampMs) return false;
       }
-      // Check if any of the alert's matched list IDs are in the requested listIds
-      return alert.listsMatched.some((matchedList) => {
-        if (!matchedList || !matchedList.id) {
+      
+      // Check listIds if filter provided
+      if (listIdsSet !== null) {
+        if (!alert.listsMatched || !Array.isArray(alert.listsMatched)) {
           return false;
         }
-        const matchedListId = String(matchedList.id).trim();
-        return listIds.includes(matchedListId);
-      });
+        // Check if any matched list ID is in the set
+        let hasMatch = false;
+        for (let i = 0; i < alert.listsMatched.length; i++) {
+          const matchedList = alert.listsMatched[i];
+          if (matchedList && matchedList.id) {
+            if (listIdsSet.has(String(matchedList.id).trim())) {
+              hasMatch = true;
+              break;
+            }
+          }
+        }
+        if (!hasMatch) return false;
+      }
+      
+      return true;
     });
   }
 

@@ -38,6 +38,9 @@ let alertPollingInterval = null;
 let listsPollingInterval = null;
 let pollingInitialized = false;
 
+// Cache for alert type filters (per user configuration)
+const alertTypeFilterCache = new Map();
+
 /**
  * Initialize polling for alerts
  * @param {Object} options - Configuration options containing clientId, clientSecret, and pollInterval
@@ -202,11 +205,21 @@ const shutdown = () => {
  * @returns {Function} Filter function that returns true if alert should be included
  */
 const createAlertTypeFilter = (options) => {
-  // Get configured alert types to watch (default to all if not configured)
+  // Create cache key from alert types configuration
   const alertTypesToWatch =
     options.setAlertTypesToWatch && options.setAlertTypesToWatch.length > 0
       ? options.setAlertTypesToWatch
       : DEFAULT_ALERT_TYPES_TO_WATCH;
+  
+  // Create stable cache key (JSON string of sorted array)
+  const cacheKey = JSON.stringify(
+    alertTypesToWatch.map(t => (t && typeof t === 'object' && t.value) ? t.value : t).sort()
+  );
+  
+  // Return cached filter if exists
+  if (alertTypeFilterCache.has(cacheKey)) {
+    return alertTypeFilterCache.get(cacheKey);
+  }
 
   // Normalize to lowercase for comparison
   // Handle both string arrays and object arrays with {value, display} structure
@@ -220,18 +233,26 @@ const createAlertTypeFilter = (options) => {
     // Otherwise treat as string
     return typeof type === 'string' ? type.toLowerCase() : String(type).toLowerCase();
   });
+  
+  // Convert to Set for O(1) lookup
+  const alertTypesSet = new Set(normalizedAlertTypesToWatch);
 
   // Return filter function that checks if alert type should be included
-  return (alert) => {
-    if (!normalizedAlertTypesToWatch || normalizedAlertTypesToWatch.length === 0) {
+  const filterFn = (alert) => {
+    if (alertTypesSet.size === 0) {
       return true; // Include all if no filter configured
     }
     const alertTypeName =
       alert.alertType && alert.alertType.name
         ? alert.alertType.name.toLowerCase()
         : 'alert';
-    return normalizedAlertTypesToWatch.indexOf(alertTypeName) !== -1;
+    return alertTypesSet.has(alertTypeName);
   };
+  
+  // Cache the filter function
+  alertTypeFilterCache.set(cacheKey, filterFn);
+  
+  return filterFn;
 };
 
 /**

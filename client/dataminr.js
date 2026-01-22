@@ -917,16 +917,30 @@ class DataminrIntegration {
           dataminrDetailsContainer.appendChild(detailsContainer);
         }
 
-        // Create and add the detail element
+        // Create and add the detail element with loading state
         detailContainer = document.createElement('div');
         detailContainer.className = 'dataminr-alert-detail';
         detailContainer.setAttribute('data-alert-id', alertId);
+        detailContainer.innerHTML = '<div style="padding: 20px; text-align: center;">Loading alert details...</div>';
+        detailsContainer.appendChild(detailContainer);
 
-        // Build detail HTML (backend will fetch alert from its cache)
+        // Show it immediately in loading state
+        this.hideAllDetails();
+        detailContainer.style.display = 'block';
+        detailContainer.classList.add('visible');
+
+        // Scroll notification overlay to top when alert is selected
+        const notificationContainer = byId('notification-overlay-scroll-container');
+        if (notificationContainer) {
+          notificationContainer.scrollTop = 0;
+        }
+
+        // Build detail HTML asynchronously (backend will fetch alert from its cache)
         const detailHtml = await this.buildAlertDetailHtml(alertId);
 
         // If no HTML returned, alert might not exist
         if (!detailHtml) {
+          detailContainer.innerHTML = '<div style="padding: 20px; text-align: center;">Alert not found</div>';
           return;
         }
 
@@ -937,7 +951,6 @@ class DataminrIntegration {
         detailContainer.innerHTML = contentElement
           ? contentElement.innerHTML
           : detailHtml;
-        detailsContainer.appendChild(detailContainer);
 
         // Add click handler for close icon
         const closeIcon = detailContainer.querySelector('.dataminr-alert-close-icon');
@@ -950,10 +963,9 @@ class DataminrIntegration {
             }
           });
         }
-      }
-
-      this.hideAllDetails();
-      if (detailContainer) {
+      } else {
+        // Container already exists, just show it
+        this.hideAllDetails();
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
 
@@ -2895,26 +2907,10 @@ class DataminrIntegration {
         return;
       }
 
-      // For regular alert tags - load all alerts first, then activate
-      const clickedAlertId = alertId;
-      this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true).then(
-        () => {
-          // Find and activate the clicked tag after rebuild
-          const integrationContainer = this.getIntegrationContainer();
-          if (!integrationContainer) return;
-          const allTagButtons = qsa(
-            '.dataminr-tag[data-alert-id]',
-            integrationContainer
-          );
-          for (let i = 0; i < allTagButtons.length; i++) {
-            const btn = allTagButtons[i];
-            if (btn.getAttribute('data-alert-id') === clickedAlertId) {
-              this.handleAlertTagClick(clickedAlertId, btn);
-              break;
-            }
-          }
-        }
-      );
+      // For regular alert tags - just show the detail immediately (no need to rebuild)
+      this.deactivateAllTagButtons();
+      tagButton.classList.add('active');
+      this.showDetail(alertId);
     });
   }
 

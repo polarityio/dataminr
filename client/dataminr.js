@@ -946,16 +946,30 @@ class DataminrIntegration {
           dataminrDetailsContainer.appendChild(detailsContainer);
         }
 
-        // Create and add the detail element
+        // Create and add the detail element with loading state
         detailContainer = document.createElement('div');
         detailContainer.className = 'dataminr-alert-detail';
         detailContainer.setAttribute('data-alert-id', alertId);
+        detailContainer.innerHTML = '<div style="padding: 20px; text-align: center;">Loading alert details...</div>';
+        detailsContainer.appendChild(detailContainer);
 
-        // Build detail HTML (backend will fetch alert from its cache)
+        // Show it immediately in loading state
+        this.hideAllDetails();
+        detailContainer.style.display = 'block';
+        detailContainer.classList.add('visible');
+
+        // Scroll notification overlay to top when alert is selected
+        const notificationContainer = byId('notification-overlay-scroll-container');
+        if (notificationContainer) {
+          notificationContainer.scrollTop = 0;
+        }
+
+        // Build detail HTML asynchronously (backend will fetch alert from its cache)
         const detailHtml = await this.buildAlertDetailHtml(alertId);
 
         // If no HTML returned, alert might not exist
         if (!detailHtml) {
+          detailContainer.innerHTML = '<div style="padding: 20px; text-align: center;">Alert not found</div>';
           return;
         }
 
@@ -966,7 +980,6 @@ class DataminrIntegration {
         detailContainer.innerHTML = contentElement
           ? contentElement.innerHTML
           : detailHtml;
-        detailsContainer.appendChild(detailContainer);
 
         // Add click handler for close icon
         const closeIcon = detailContainer.querySelector('.dataminr-alert-close-icon');
@@ -979,10 +992,9 @@ class DataminrIntegration {
             }
           });
         }
-      }
-
-      this.hideAllDetails();
-      if (detailContainer) {
+      } else {
+        // Container already exists, just show it
+        this.hideAllDetails();
         detailContainer.style.display = 'block';
         detailContainer.classList.add('visible');
 
@@ -1095,9 +1107,7 @@ class DataminrIntegration {
               <span id="dataminr-remaining-count" class="dataminr-tag-headline">+${remainingCount}</span>
             </div>
           `;
-          newRemainingButton.addEventListener('click', () => {
-            this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true);
-          });
+          // Note: Click handler managed by setupAlertTagDelegation() - no individual listener needed
           alertsList.appendChild(newRemainingButton);
         }
       }
@@ -1150,12 +1160,7 @@ class DataminrIntegration {
       alertsListContainer.appendChild(tagButton);
     }
 
-    // Add click handler for the tag button
-    tagButton.addEventListener('click', () => {
-      this.handleAlertTagClick(alertId, tagButton);
-    });
-
-    // Note: Detail containers are built dynamically when shown via showDetail()
+    // Note: Click handler managed by setupAlertTagDelegation() - no individual listener needed
   }
 
   /**
@@ -1576,64 +1581,7 @@ class DataminrIntegration {
         });
       }
 
-      // Add click handlers for alert tag buttons to toggle active state and show details
-      const alertTagButtons = qsa('.dataminr-tag', integrationContainer);
-      alertTagButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-          const alertId = button.getAttribute('data-alert-id');
-
-          // Check if button is already active - if so, just toggle it off (no need to load all alerts)
-          const isActive = button.classList.contains('active');
-          if (isActive) {
-            this.handleAlertTagClick(alertId, button);
-            return;
-          }
-
-          // Load all alerts first, then handle the click
-          // Store alertId since updateAlertsDisplay will rebuild the UI and button reference will be stale
-          const clickedAlertId = alertId;
-          this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true).then(
-            () => {
-              // Handle remaining button click - just show all alerts, no need to activate
-              if (clickedAlertId === 'remaining') {
-                return;
-              }
-
-              // For regular tag clicks, find and activate the clicked tag
-              const integrationContainer = this.getIntegrationContainer();
-              if (!integrationContainer) return;
-              const allTagButtons = qsa(
-                '.dataminr-tag[data-alert-id]',
-                integrationContainer
-              );
-              let tagButton = null;
-              for (let i = 0; i < allTagButtons.length; i++) {
-                const btn = allTagButtons[i];
-                if (btn.getAttribute('data-alert-id') === clickedAlertId) {
-                  tagButton = btn;
-                  break;
-                }
-              }
-
-              if (tagButton) {
-                this.handleAlertTagClick(clickedAlertId, tagButton);
-              }
-            }
-          );
-        });
-      });
-
-      // Add click handlers for close icons to mark single alert as read
-      const closeIcons = qsa('.dataminr-alert-close-icon', integrationContainer);
-      closeIcons.forEach((closeIcon) => {
-        closeIcon.addEventListener('click', (e) => {
-          e.stopPropagation(); // Prevent triggering tag button click
-          const alertId = closeIcon.getAttribute('data-alert-id');
-          if (alertId) {
-            this.markAlertAsRead(alertId);
-          }
-        });
-      });
+      // Note: Click handlers are managed by setupAlertTagDelegation() - no individual listeners needed
     } else {
       // Container exists, check if we need to add more alerts
       const visibleTagButtons = qsa(
@@ -1938,8 +1886,12 @@ class DataminrIntegration {
 
     // Common initialization for both new and existing containers
     this.updateAlertCount(0);
+    this.setupAlertTagDelegation();
     this.setupCopyButtonDelegation();
     this.setupMediaErrorHandling();
+
+    // Stop any existing polling before starting new one
+    this.stopPolling();
 
     // Start polling after a short delay to ensure UI is ready
     setTimeout(() => {
@@ -2987,10 +2939,59 @@ class DataminrIntegration {
   }
 
   /**
+   * Setup event delegation for alert tag button clicks
+   * @private
+   */
+  setupAlertTagDelegation() {
+    // Check if handler already attached to prevent duplicates
+    if (this._alertTagHandlerAttached) {
+      return;
+    }
+    this._alertTagHandlerAttached = true;
+
+    // Use event delegation to handle all alert tag clicks (no individual listeners needed)
+    document.body.addEventListener('click', (e) => {
+      const tagButton = e.target.closest('.dataminr-tag');
+      if (!tagButton) {
+        return;
+      }
+
+      const alertId = tagButton.getAttribute('data-alert-id');
+      if (!alertId) {
+        return;
+      }
+
+      // Check if button is already active - if so, just toggle it off
+      const isActive = tagButton.classList.contains('active');
+      if (isActive) {
+        this.handleAlertTagClick(alertId, tagButton);
+        return;
+      }
+
+      // Handle remaining button - show all alerts
+      if (alertId === 'remaining') {
+        this.updateAlertsDisplay(Array.from(this.currentAlertIds.values()), true);
+        return;
+      }
+
+      // For regular alert tags - just show the detail immediately (no need to rebuild)
+      this.deactivateAllTagButtons();
+      tagButton.classList.add('active');
+      this.showDetail(alertId);
+    });
+  }
+
+  /**
    * Set up event delegation for copy buttons and image modals
    * @private
    */
   setupCopyButtonDelegation() {
+    // Check if handler already attached to prevent duplicates
+    if (this._copyButtonHandlerAttached) {
+      return;
+    }
+    this._copyButtonHandlerAttached = true;
+
     // Use event delegation on document body to handle dynamically created buttons
     document.body.addEventListener('click', (e) => {
       // Handle live brief copy button

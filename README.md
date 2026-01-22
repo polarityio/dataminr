@@ -47,6 +47,27 @@ The interval in seconds for the server to poll for new Alerts
 - Minimum: `30` seconds
 - Admin Only: Yes
 
+## Rate Limiting
+
+The integration implements automatic rate limiting based on the Dataminr API's response headers with intelligent request queuing. This prevents 429 (Too Many Requests) errors and timeout issues.
+
+**How it works:**
+- Starts with sane defaults: 6 requests per 30-second window
+- Monitors `x-ratelimit-limit`, `x-ratelimit-remaining`, and `x-ratelimit-reset` headers from every API response
+- Automatically adjusts rate limiting based on the actual API limits
+- **Request queuing**: When rate limits are exhausted, requests are queued (max 12 requests)
+- Requests beyond the queue limit are dropped with an error to prevent timeouts
+- Waits when quota is exhausted, using the API's `x-ratelimit-reset` value for precise timing
+- No user configuration needed - the integration adapts to the API's rate limits automatically
+
+**Queue behavior:**
+- Maximum queue size: 12 requests
+- Requests are processed one at a time when rate limit allows
+- If the queue is full, new requests are immediately rejected with an error
+- This prevents the UI from timing out when clicking rapidly on alerts
+
+**Note:** Rate limiting is applied only to Dataminr API calls, not to authentication token requests.
+
 ## Installation Instructions
 
 Installation instructions for integrations are provided on the [PolarityIO GitHub Page](https://polarityio.github.io/).

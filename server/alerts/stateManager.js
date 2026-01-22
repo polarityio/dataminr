@@ -108,7 +108,43 @@ const filterAlertsByAge = (alerts, alertFilterTimestamp = null) => {
  */
 const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
   const alerts = alertsCache.get(ALERTS_KEY) || [];
-  let filteredAlerts = filterAlertsByAge(alerts, alertFilterTimestamp);
+  
+  // Early return if no alerts
+  if (alerts.length === 0) {
+    return [];
+  }
+  
+  // Only filter by age if we actually need to check
+  // (alerts are already filtered on add, so this is just for cleanup of old entries)
+  let filteredAlerts = alerts;
+  const now = Date.now();
+  const cutoffTime = now - CACHE_MAX_AGE_MS;
+  
+  // Quick check: is the oldest alert (last in array) still valid?
+  const oldestAlert = alerts[alerts.length - 1];
+  if (oldestAlert && oldestAlert.alertTimestamp) {
+    const oldestTime = new Date(oldestAlert.alertTimestamp).getTime();
+    if (oldestTime <= cutoffTime) {
+      // We have old alerts, need to filter
+      filteredAlerts = alerts.filter((alert) => {
+        if (!alert.alertTimestamp) return false;
+        const alertTime = new Date(alert.alertTimestamp).getTime();
+        return alertTime > cutoffTime;
+      });
+      // Update cache with filtered list (cleanup)
+      alertsCache.set(ALERTS_KEY, filteredAlerts);
+    }
+  }
+  
+  // Filter by timestamp if provided
+  if (alertFilterTimestamp) {
+    const filterTimestamp = new Date(alertFilterTimestamp).getTime();
+    filteredAlerts = filteredAlerts.filter((alert) => {
+      if (!alert.alertTimestamp) return false;
+      const alertTime = new Date(alert.alertTimestamp).getTime();
+      return alertTime > filterTimestamp;
+    });
+  }
 
   // Filter by listIds if provided (this is a user-specific filter, doesn't affect cache)
   if (listIds && listIds.length > 0) {
@@ -141,50 +177,96 @@ const getCachedAlerts = (listIds = null, alertFilterTimestamp = null) => {
  * @returns {number} returns.total - Total alerts in cache after adding
  */
 const addAlertsToCache = (alerts) => {
-  const existingAlerts = getCachedAlerts();
+  if (!alerts || alerts.length === 0) {
+    return { added: 0, total: alertsCache.get(ALERTS_KEY)?.length || 0 };
+  }
 
-  // Merge alerts while maintaining sort order (newest first)
-  // New alerts from API are already sorted newest first, so prepend them
-  const allAlerts = [...alerts, ...existingAlerts];
-
-  // Sort by timestamp (newest first) to ensure correct order
-  // This handles edge cases where alerts might not be perfectly sorted
-  allAlerts.sort((a, b) => {
-    const timeA = a.alertTimestamp ? new Date(a.alertTimestamp).getTime() : 0;
-    const timeB = b.alertTimestamp ? new Date(b.alertTimestamp).getTime() : 0;
-    return timeB - timeA; // Descending order (newest first)
-  });
-
-  // Remove duplicates based on alertId
-  const seenIds = new Set();
-  const deduplicatedAlerts = allAlerts.filter((alert) => {
+  const existingAlerts = alertsCache.get(ALERTS_KEY) || [];
+  const existingMap = alertsMapCache.get(ALERTS_MAP_KEY) || new Map();
+  
+  // Filter out duplicates from incoming alerts using existing map
+  const now = Date.now();
+  const cutoffTime = now - CACHE_MAX_AGE_MS;
+  const newAlertsToAdd = [];
+  
+  alerts.forEach((alert) => {
     if (!alert.alertId) {
-      return true; // Keep alerts without IDs
+      // No ID - add it but it won't be in map
+      newAlertsToAdd.push(alert);
+      return;
     }
-    if (seenIds.has(alert.alertId)) {
+    
+    // Skip if already exists
+    if (existingMap.has(alert.alertId)) {
+      return;
+    }
+    
+    // Skip if too old (no point adding it)
+    const alertTime = alert.alertTimestamp ? new Date(alert.alertTimestamp).getTime() : now;
+    if (alertTime <= cutoffTime) {
+      return;
+    }
+    
+    newAlertsToAdd.push(alert);
+    existingMap.set(alert.alertId, alert); // Add to map immediately
+  });
+  
+  if (newAlertsToAdd.length === 0) {
+    return { added: 0, total: existingAlerts.length };
+  }
+
+  // Merge new alerts with existing (new alerts should be newer, so prepend)
+  const allAlerts = [...newAlertsToAdd, ...existingAlerts];
+  
+  // Remove old alerts (only filter if we have a significant number)
+  const filteredAlerts = allAlerts.filter((alert) => {
+    if (!alert.alertTimestamp) {
       return false;
     }
-    seenIds.add(alert.alertId);
-    return true;
+    const alertTime = new Date(alert.alertTimestamp).getTime();
+    return (now - alertTime) <= CACHE_MAX_AGE_MS;
   });
-
-  // Filter out alerts older than 1 hour
-  const filteredAlerts = filterAlertsByAge(deduplicatedAlerts);
-
-  // Update array cache with filtered alerts
-  alertsCache.set(ALERTS_KEY, filteredAlerts);
-
-  // Update Map cache for O(1) lookups
-  const alertsMap = new Map();
-  filteredAlerts.forEach((alert) => {
-    if (alert.alertId) {
-      alertsMap.set(alert.alertId, alert);
+  
+  // Only sort if we actually added new alerts in wrong order
+  // Since API returns newest first and we prepend, order should be maintained
+  // Only sort if array is large and potentially out of order
+  if (filteredAlerts.length > 10) {
+    // Check if already sorted (newest first)
+    let needsSort = false;
+    for (let i = 1; i < Math.min(10, filteredAlerts.length); i++) {
+      const timeA = new Date(filteredAlerts[i-1].alertTimestamp).getTime();
+      const timeB = new Date(filteredAlerts[i].alertTimestamp).getTime();
+      if (timeA < timeB) {
+        needsSort = true;
+        break;
+      }
     }
-  });
-  alertsMapCache.set(ALERTS_MAP_KEY, alertsMap);
+    
+    if (needsSort) {
+      filteredAlerts.sort((a, b) => {
+        const timeA = a.alertTimestamp ? new Date(a.alertTimestamp).getTime() : 0;
+        const timeB = b.alertTimestamp ? new Date(b.alertTimestamp).getTime() : 0;
+        return timeB - timeA;
+      });
+    }
+  }
+  
+  // Rebuild map from scratch only if we removed old alerts
+  if (filteredAlerts.length !== allAlerts.length) {
+    existingMap.clear();
+    filteredAlerts.forEach((alert) => {
+      if (alert.alertId) {
+        existingMap.set(alert.alertId, alert);
+      }
+    });
+  }
+  
+  // Update caches
+  alertsCache.set(ALERTS_KEY, filteredAlerts);
+  alertsMapCache.set(ALERTS_MAP_KEY, existingMap);
 
   return {
-    added: alerts.length,
+    added: newAlertsToAdd.length,
     total: filteredAlerts.length
   };
 };

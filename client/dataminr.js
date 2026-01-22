@@ -1878,6 +1878,9 @@ class DataminrIntegration {
     this.setupCopyButtonDelegation();
     this.setupMediaErrorHandling();
 
+    // Stop any existing polling before starting new one
+    this.stopPolling();
+
     // Start polling after a short delay to ensure UI is ready
     setTimeout(() => {
       this.startPolling();
@@ -2924,6 +2927,12 @@ class DataminrIntegration {
    * @private
    */
   setupCopyButtonDelegation() {
+    // Check if handler already attached to prevent duplicates
+    if (this._copyButtonHandlerAttached) {
+      return;
+    }
+    this._copyButtonHandlerAttached = true;
+
     // Use event delegation on document body to handle dynamically created buttons
     document.body.addEventListener('click', (e) => {
       // Handle live brief copy button

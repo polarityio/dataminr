@@ -22,6 +22,7 @@ const rateLimitState = {
 // Request queue for rate limiting
 const requestQueue = [];
 const MAX_QUEUE_SIZE = 12;
+const QUEUE_REQUEST_TIMEOUT_MS = 120000; // 2 minutes - requests older than this are dropped
 let isProcessingQueue = false;
 
 /**
@@ -85,6 +86,24 @@ const processQueue = async () => {
   
   while (requestQueue.length > 0) {
     const now = Date.now();
+    
+    // Remove expired requests from front of queue
+    while (requestQueue.length > 0 && requestQueue[0].expiresAt < now) {
+      const expiredRequest = requestQueue.shift();
+      Logger.warn(
+        { 
+          queueSize: requestQueue.length,
+          ageMs: now - (expiredRequest.expiresAt - QUEUE_REQUEST_TIMEOUT_MS)
+        },
+        'Dropping expired request from queue'
+      );
+      expiredRequest.reject(new Error('Request timed out in queue'));
+    }
+    
+    // Check if queue is now empty after removing expired requests
+    if (requestQueue.length === 0) {
+      break;
+    }
     
     // Check if rate limit has reset
     if (rateLimitState.resetAt && now >= rateLimitState.resetAt) {
@@ -166,8 +185,9 @@ const queueRequest = async (requestFn) => {
   }
   
   return new Promise((resolve, reject) => {
-    // Add request to queue with its resolve/reject handlers
+    // Add request to queue with its resolve/reject handlers and expiration time
     requestQueue.push({
+      expiresAt: Date.now() + QUEUE_REQUEST_TIMEOUT_MS,
       execute: async () => {
         try {
           const result = await requestFn();
@@ -175,7 +195,8 @@ const queueRequest = async (requestFn) => {
         } catch (error) {
           reject(error);
         }
-      }
+      },
+      reject: reject // Store reject so we can call it for expired requests
     });
     
     Logger.debug(

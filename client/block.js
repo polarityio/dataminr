@@ -5,6 +5,10 @@ polarity.export = PolarityComponent.extend({
   timezone: Ember.computed('Intl', function () {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   }),
+  /**
+   * Initialize the component and set up default state
+   * @returns {void}
+   */
   init() {
     if (!this.get('block._state')) {
       this.set('block._state', {});
@@ -14,6 +18,12 @@ polarity.export = PolarityComponent.extend({
     this._super(...arguments);
   },
   actions: {
+    /**
+     * Toggle the expanded state of a title section
+     * @param {number} index - Index of the item to toggle
+     * @param {string} type - Type of the expandable title
+     * @returns {void}
+     */
     toggleExpandableTitle: function (index, type) {
       this.set(
         `block._state.expandableTitleStates`,

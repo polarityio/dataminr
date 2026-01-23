@@ -1,8 +1,29 @@
 {
   "polarityIntegrationUuid": "9c124af0-17c7-11ef-9994-a9e6b5f6d87d",
-  "name": "Dataminr",
-  "acronym": "DM",
-  "description": "Search Dataminr by all entities to get related Alerts",
+  "name": "Dataminr Pulse",
+  "acronym": "DMP",
+  "description": "Search Dataminr Pulse by all entities to get related Alerts. Pin Dataminr Pulse incoming alerts to the top of Polarity for instant notification.",
+  "dataTypes": [
+    "domain",
+    "IPv4",
+    "IPv6",
+    "IPv4CIDR",
+    "email",
+    "MD5",
+    "SHA1",
+    "SHA256",
+    "cve",
+    "url",
+    {
+      "type": "custom",
+      "name": "All Text",
+      "description": "Matches on all possible text",
+      "editable": false,
+      "enabled": false,
+      "key": "allText",
+      "regex": "\\S[\\s\\S]{2,256}\\S"
+    }
+  ],
   "entityTypes": [
     "domain",
     "IPv4",
@@ -20,6 +41,9 @@
       "key": "allText",
       "regex": "\\S[\\s\\S]{2,256}\\S"
     }
+  ],
+  "javascript": [
+    "./client/dataminr.js"
   ],
   "styles": [
     "./client/styles.less"
@@ -46,10 +70,54 @@
   },
   "options": [
     {
+      "key": "stickyAlerts",
+      "name": "Pin Dataminr Alerts",
+      "description": "User can pin Dataminr Alerts to the top of their Polarity UI.",
+      "default": true,
+      "type": "boolean",
+      "userCanEdit": true,
+      "adminOnly": false
+    },
+    {
+      "key": "setListsToWatch",
+      "name": "Filter Lists",
+      "description": "User can filter the alerts based on lists for pinned alerts",
+      "type": "select",
+      "default": [],
+      "userCanEdit": true,
+      "adminOnly": false,
+      "multiple": true,
+      "options": []
+    },
+    {
+      "key": "setAlertTypesToWatch",
+      "name": "Filter Alert Types",
+      "description": "Admin can filter the alert types retrieved for pinned alerts",
+      "type": "select",
+      "default": [],
+      "userCanEdit": false,
+      "adminOnly": true,
+      "multiple": true,
+      "options": [
+        {
+          "value": "flash",
+          "display": "Flash"
+        },
+        {
+          "value": "urgent",
+          "display": "Urgent"
+        },
+        {
+          "value": "alert",
+          "display": "Alert"
+        }
+      ]
+    },
+    {
       "key": "url",
       "name": "Dataminr API URL",
       "description": "The base URL of the Dataminr API including the schema (i.e., https://)",
-      "default": "https://gateway.dataminr.com",
+      "default": "https://api.dataminr.com",
       "type": "text",
       "userCanEdit": false,
       "adminOnly": true
@@ -71,6 +139,21 @@
       "type": "password",
       "userCanEdit": false,
       "adminOnly": true
+    },
+    {
+      "key": "pollInterval",
+      "name": "Poll Interval",
+      "description": "The interval in seconds for the server to poll for new Alerts",
+      "default": 60,
+      "type": "number",
+      "userCanEdit": false,
+      "adminOnly": true,
+      "validators": [
+        {
+          "type": "sec",
+          "value": 30
+        }
+      ]
     }
   ]
 }

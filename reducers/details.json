@@ -1,0 +1,36 @@
+{
+  "root": {
+    "path": "",
+    "on_null": "return_empty"
+  },
+  "pipeline": [
+    {
+      "op": "copy",
+      "from": "alerts[].caption",
+      "to": "reduced_results.alerts_caption"
+    },
+    {
+      "op": "copy",
+      "from": "alerts[].eventLocation.name",
+      "to": "reduced_results.alerts_event_location_name"
+    },
+    {
+      "op": "copy",
+      "from": "alerts[].companies[].name",
+      "to": "reduced_results.alerts_companies_name"
+    },
+    {
+      "op": "copy",
+      "from": "alerts[].intelAgentsGrouped",
+      "to": "reduced_results.alerts_intel_agents_grouped"
+    },
+    {
+      "op": "prune",
+      "strategy": "empty_values",
+      "target": "reduced_results"
+    }
+  ],
+  "output": {
+    "result": "$working.reduced_results"
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "alerts": [
+    {
+      "alertId": "3847563829-1",
+      "alertType": "alert",
+      "caption": "BREAKING: Major data breach reported at Fortune 500 company, affecting millions of customer records. Initial reports suggest ransomware involvement. Investigation ongoing.",
+      "eventLocation": {
+        "name": "San Francisco, CA, United States",
+        "coordinates": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        }
+      },
+      "eventTime": "2024-01-15T18:45:32Z",
+      "publisherCategory": {
+        "id": "cyber",
+        "name": "Cybersecurity"
+      },
+      "companies": [
+        {
+          "name": "Acme Corporation",
+          "ticker": "ACME",
+          "exchange": "NYSE"
+        },
+        {
+          "name": "CyberDefense Solutions Inc",
+          "ticker": "CDS",
+          "exchange": "NASDAQ"
+        }
+      ],
+      "categories": [
+        {
+          "id": "cat_breach",
+          "name": "Data Breach"
+        },
+        {
+          "id": "cat_ransomware",
+          "name": "Ransomware"
+        }
+      ],
+      "intelAgentsGrouped": [
+        {
+          "agentType": "malware",
+          "agents": ["LockBit", "BlackCat"]
+        },
+        {
+          "agentType": "threatActor",
+          "agents": ["APT29", "Lazarus Group"]
+        }
+      ],
+      "metadata": {
+        "cyber": {
+          "vulnerabilities": [
+            {
+              "cve": "CVE-2024-0001",
+              "cvss": 9.8,
+              "severity": "critical",
+              "description": "Remote code execution vulnerability",
+              "exploitPocLinks": ["https://example.com/exploit-poc"],
+              "products": [
+                {
+                  "productVendor": "Microsoft",
+                  "productName": "Windows Server",
+                  "productVersion": "2019"
+                }
+              ]
+            }
+          ],
+          "threats": ["ransomware", "data exfiltration"],
+          "URLs": ["https://malicious-c2-server.example.com"],
+          "addresses": [
+            {
+              "ip": "192.0.2.100",
+              "port": 8443
+            }
+          ],
+          "asns": ["AS15169"],
+          "orgs": ["Malicious Hosting Ltd"],
+          "hashes": [
+            "a3b5c7d9e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6",
+            "1234567890abcdef1234567890abcdef"
+          ],
+          "products": ["Windows Server 2019", "Apache HTTP Server"],
+          "malwares": ["LockBit 3.0", "BlackCat ALPHV"]
+        }
+      },
+      "relatedTerms": [
+        {
+          "text": "ransomware attack",
+          "url": "https://app.dataminr.com/search?q=ransomware"
+        },
+        {
+          "text": "data breach",
+          "url": "https://app.dataminr.com/search?q=data+breach"
+        }
+      ],
+      "source": {
+        "displayName": "@CyberNewsDaily",
+        "username": "cybernewsdaily",
+        "verified": true
+      },
+      "post": {
+        "link": "https://twitter.com/cybernewsdaily/status/1234567890",
+        "timestamp": "2024-01-15T18:43:10Z",
+        "media": [
+          {
+            "type": "photo",
+            "media_url": "https://pbs.twimg.com/media/example.jpg",
+            "display_url": "pic.twitter.com/example",
+            "source": "twitter"
+          }
+        ]
+      },
+      "expandAlertURL": "https://app.dataminr.com/app/alert/3847563829-1",
+      "eventMapLargeURL": "https://maps.dataminr.com/static/map?center=37.7749,-122.4194",
+      "score": 98.5,
+      "watchlistMatches": ["critical_infrastructure", "fortune_500"],
+      "sentiment": "negative"
+    },
+    {
+      "alertId": "3847563830-2",
+      "alertType": "alert",
+      "caption": "Critical vulnerability disclosed in widely-used open source library. Proof-of-concept exploit code published. Immediate patching recommended.",
+      "eventLocation": {
+        "name": "Global"
+      },
+      "eventTime": "2024-01-15T17:30:15Z",
+      "publisherCategory": {
+        "id": "cyber",
+        "name": "Cybersecurity"
+      },
+      "companies": [
+        {
+          "name": "Open Source Foundation",
+          "ticker": null,
+          "exchange": null
+        }
+      ],
+      "categories": [
+        {
+          "id": "cat_vuln",
+          "name": "Vulnerability Disclosure"
+        }
+      ],
+      "intelAgentsGrouped": [
+        {
+          "agentType": "vulnerability",
+          "agents": ["CVE-2024-0002", "CVE-2024-0003"]
+        }
+      ],
+      "metadata": {
+        "cyber": {
+          "vulnerabilities": [
+            {
+              "cve": "CVE-2024-0002",
+              "cvss": 10.0,
+              "severity": "critical",
+              "description": "Authentication bypass in OpenSSL",
+              "exploitPocLinks": [
+                "https://github.com/example/exploit-poc",
+                "https://nvd.nist.gov/vuln/detail/CVE-2024-0002"
+              ],
+              "products": [
+                {
+                  "productVendor": "OpenSSL",
+                  "productName": "OpenSSL",
+                  "productVersion": "3.0.x"
+                }
+              ]
+            }
+          ],
+          "threats": ["remote code execution", "authentication bypass"],
+          "URLs": [],
+          "addresses": [],
+          "asns": [],
+          "orgs": [],
+          "hashes": [],
+          "products": ["OpenSSL 3.0.0 through 3.0.7"],
+          "malwares": []
+        }
+      },
+      "relatedTerms": [
+        {
+          "text": "CVE-2024-0002",
+          "url": "https://app.dataminr.com/search?q=CVE-2024-0002"
+        }
+      ],
+      "source": {
+        "displayName": "National Vulnerability Database",
+        "username": "nvd_nist",
+        "verified": true
+      },
+      "post": {
+        "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0002",
+        "timestamp": "2024-01-15T17:28:00Z",
+        "media": []
+      },
+      "expandAlertURL": "https://app.dataminr.com/app/alert/3847563830-2",
+      "eventMapLargeURL": null,
+      "score": 95.2,
+      "watchlistMatches": ["cve_tracking", "critical_vulns"],
+      "sentiment": "neutral"
+    }
+  ]
+}

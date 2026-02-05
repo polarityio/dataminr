@@ -1,205 +1,294 @@
 {
   "alerts": [
     {
-      "alertId": "3847563829-1",
-      "alertType": "alert",
-      "caption": "BREAKING: Major data breach reported at Fortune 500 company, affecting millions of customer records. Initial reports suggest ransomware involvement. Investigation ongoing.",
+      "alertId": "dm-alert-12345",
+      "alertType": "Alert",
+      "caption": "Critical vulnerability CVE-2024-1234 being actively exploited in Apache Struts, affecting multiple Fortune 500 companies",
+      "eventTime": 1704067200000,
       "eventLocation": {
-        "name": "San Francisco, CA, United States",
+        "name": "United States",
         "coordinates": {
-          "lat": 37.7749,
-          "lon": -122.4194
+          "lat": 37.0902,
+          "lon": -95.7129
         }
       },
-      "eventTime": "2024-01-15T18:45:32Z",
-      "publisherCategory": {
-        "id": "cyber",
-        "name": "Cybersecurity"
-      },
+      "expandAlertURL": "https://app.dataminr.com/app/alert/dm-alert-12345",
+      "eventMapLargeURL": "https://maps.dataminr.com/static/map-12345.png",
       "companies": [
         {
-          "name": "Acme Corporation",
-          "ticker": "ACME",
-          "exchange": "NYSE"
+          "name": "Apache Software Foundation",
+          "ticker": null
         },
         {
-          "name": "CyberDefense Solutions Inc",
-          "ticker": "CDS",
-          "exchange": "NASDAQ"
+          "name": "Cisco Systems",
+          "ticker": "CSCO"
         }
       ],
       "categories": [
         {
-          "id": "cat_breach",
-          "name": "Data Breach"
+          "id": "cat-cyber",
+          "name": "Cyber"
         },
         {
-          "id": "cat_ransomware",
-          "name": "Ransomware"
+          "id": "cat-vuln",
+          "name": "Vulnerabilities"
         }
       ],
-      "intelAgentsGrouped": [
-        {
-          "agentType": "malware",
-          "agents": ["LockBit", "BlackCat"]
-        },
-        {
-          "agentType": "threatActor",
-          "agents": ["APT29", "Lazarus Group"]
-        }
-      ],
-      "metadata": {
-        "cyber": {
-          "vulnerabilities": [
-            {
-              "cve": "CVE-2024-0001",
-              "cvss": 9.8,
-              "severity": "critical",
-              "description": "Remote code execution vulnerability",
-              "exploitPocLinks": ["https://example.com/exploit-poc"],
-              "products": [
-                {
-                  "productVendor": "Microsoft",
-                  "productName": "Windows Server",
-                  "productVersion": "2019"
-                }
-              ]
-            }
-          ],
-          "threats": ["ransomware", "data exfiltration"],
-          "URLs": ["https://malicious-c2-server.example.com"],
-          "addresses": [
-            {
-              "ip": "192.0.2.100",
-              "port": 8443
-            }
-          ],
-          "asns": ["AS15169"],
-          "orgs": ["Malicious Hosting Ltd"],
-          "hashes": [
-            "a3b5c7d9e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6",
-            "1234567890abcdef1234567890abcdef"
-          ],
-          "products": ["Windows Server 2019", "Apache HTTP Server"],
-          "malwares": ["LockBit 3.0", "BlackCat ALPHV"]
-        }
-      },
       "relatedTerms": [
         {
-          "text": "ransomware attack",
-          "url": "https://app.dataminr.com/search?q=ransomware"
+          "text": "CVE-2024-1234",
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-1234"
         },
         {
-          "text": "data breach",
-          "url": "https://app.dataminr.com/search?q=data+breach"
+          "text": "Apache Struts",
+          "url": "https://struts.apache.org"
         }
       ],
-      "source": {
-        "displayName": "@CyberNewsDaily",
-        "username": "cybernewsdaily",
-        "verified": true
+      "intelAgentsGrouped": {
+        "Vulnerabilities": [
+          {
+            "id": "CVE-2024-1234",
+            "name": "Apache Struts RCE Vulnerability",
+            "description": "Remote code execution vulnerability in Apache Struts 2.x allowing unauthenticated attackers to execute arbitrary code",
+            "cvssScore": 9.8,
+            "confidence": "high",
+            "exploitAvailable": true,
+            "patchAvailable": true,
+            "affectedVersions": ["2.0.0", "2.5.32"]
+          }
+        ],
+        "Malware": [
+          {
+            "name": "Mirai Botnet",
+            "family": "Mirai",
+            "type": "Botnet",
+            "confidence": "medium",
+            "firstSeen": "2024-01-15T10:30:00Z"
+          }
+        ],
+        "Adversaries": [
+          {
+            "name": "APT28",
+            "aliases": ["Fancy Bear", "Sofacy"],
+            "confidence": "high",
+            "attribution": "Russia-linked threat actor"
+          }
+        ],
+        "LiveBriefs": [
+          {
+            "briefId": "lb-67890",
+            "title": "Surge in Apache Struts exploitation",
+            "summary": "Security researchers observe increased scanning and exploitation attempts targeting CVE-2024-1234",
+            "priority": "critical",
+            "timestamp": "2024-01-20T14:22:00Z"
+          }
+        ]
       },
+      "metadata": {
+        "cyber": {
+          "threats": ["Remote Code Execution", "Web Application Attack"],
+          "URLs": [
+            "http://malicious-scanner.example.com/exploit",
+            "https://pastebin.com/exploit-code-abc123"
+          ],
+          "addresses": [
+            {
+              "ip": "192.0.2.15",
+              "port": 8080
+            },
+            {
+              "ip": "198.51.100.42",
+              "port": 443
+            }
+          ],
+          "asns": ["AS64512", "AS13335"],
+          "orgs": ["Example Hosting LLC", "CloudFlare Inc"],
+          "hashes": [
+            "d41d8cd98f00b204e9800998ecf8427e",
+            "5d41402abc4b2a76b9719d911017c592"
+          ],
+          "products": ["Apache Struts 2.x", "Tomcat 9.0"],
+          "malwares": ["Mirai", "DDoS Bot"],
+          "vulnerabilities": [
+            {
+              "id": "CVE-2024-1234",
+              "cvss": 9.8,
+              "products": [
+                {
+                  "productVendor": "apache",
+                  "productName": "struts",
+                  "productVersion": "2.5.30"
+                },
+                {
+                  "productVendor": "apache",
+                  "productName": "struts",
+                  "productVersion": "2.5.31"
+                }
+              ],
+              "exploitPocLinks": [
+                "https://github.com/example/poc-cve-2024-1234",
+                "https://exploit-db.com/exploits/51234"
+              ]
+            }
+          ]
+        },
+        "timestamp": "2024-01-20T15:45:30Z",
+        "geolocation": {
+          "lat": 40.7128,
+          "lon": -74.0060,
+          "country": "United States",
+          "region": "New York"
+        },
+        "eventType": "Cyber Threat",
+        "severity": "Critical",
+        "confidence": 95,
+        "entityCues": {
+          "organizations": ["Apache Software Foundation", "Cisco Systems"],
+          "infrastructure": ["Web Servers", "Application Servers"],
+          "sectors": ["Technology", "Finance"]
+        }
+      },
+      "linkedAlerts": [
+        {
+          "linkedAlertId": "dm-alert-67890",
+          "linkType": "related_campaign",
+          "summary": "Similar exploitation attempts targeting government networks",
+          "eventTime": 1704053400000
+        },
+        {
+          "linkedAlertId": "dm-alert-54321",
+          "linkType": "subsequent_event",
+          "summary": "Data exfiltration activity following successful exploitation",
+          "eventTime": 1704070800000
+        }
+      ],
       "post": {
-        "link": "https://twitter.com/cybernewsdaily/status/1234567890",
-        "timestamp": "2024-01-15T18:43:10Z",
+        "link": "https://twitter.com/securityresearcher/status/1234567890",
+        "timestamp": 1704067000000,
         "media": [
           {
             "type": "photo",
             "media_url": "https://pbs.twimg.com/media/example.jpg",
-            "display_url": "pic.twitter.com/example",
+            "display_url": "pic.twitter.com/abcd1234",
             "source": "twitter"
           }
         ]
       },
-      "expandAlertURL": "https://app.dataminr.com/app/alert/3847563829-1",
-      "eventMapLargeURL": "https://maps.dataminr.com/static/map?center=37.7749,-122.4194",
-      "score": 98.5,
-      "watchlistMatches": ["critical_infrastructure", "fortune_500"],
-      "sentiment": "negative"
+      "source": {
+        "displayName": "@SecurityResearcher",
+        "username": "securityresearcher",
+        "entityName": "Security Researcher",
+        "verified": true
+      },
+      "score": 87,
+      "alertVersion": 14,
+      "publisherCategory": {
+        "id": "cyber-security",
+        "name": "Cyber Security"
+      },
+      "watchlistsMatchedByType": [
+        {
+          "id": "wl-123",
+          "name": "Critical Vulnerabilities",
+          "type": "CVE"
+        }
+      ]
     },
     {
-      "alertId": "3847563830-2",
-      "alertType": "alert",
-      "caption": "Critical vulnerability disclosed in widely-used open source library. Proof-of-concept exploit code published. Immediate patching recommended.",
+      "alertId": "dm-alert-99999",
+      "alertType": "Alert",
+      "caption": "Ransomware campaign targeting healthcare organizations using phishing emails with malicious attachments",
+      "eventTime": 1704096000000,
       "eventLocation": {
-        "name": "Global"
+        "name": "United Kingdom",
+        "coordinates": {
+          "lat": 51.5074,
+          "lon": -0.1278
+        }
       },
-      "eventTime": "2024-01-15T17:30:15Z",
-      "publisherCategory": {
-        "id": "cyber",
-        "name": "Cybersecurity"
-      },
+      "expandAlertURL": "https://app.dataminr.com/app/alert/dm-alert-99999",
       "companies": [
         {
-          "name": "Open Source Foundation",
-          "ticker": null,
-          "exchange": null
+          "name": "National Health Service",
+          "ticker": null
         }
       ],
       "categories": [
         {
-          "id": "cat_vuln",
-          "name": "Vulnerability Disclosure"
-        }
-      ],
-      "intelAgentsGrouped": [
+          "id": "cat-cyber",
+          "name": "Cyber"
+        },
         {
-          "agentType": "vulnerability",
-          "agents": ["CVE-2024-0002", "CVE-2024-0003"]
+          "id": "cat-ransomware",
+          "name": "Ransomware"
         }
       ],
+      "intelAgentsGrouped": {
+        "Malware": [
+          {
+            "name": "LockBit",
+            "family": "LockBit 3.0",
+            "type": "Ransomware",
+            "confidence": "high",
+            "firstSeen": "2024-01-22T08:15:00Z",
+            "ttps": ["T1486", "T1490", "T1059"]
+          }
+        ],
+        "Adversaries": [
+          {
+            "name": "LockBit Group",
+            "aliases": ["LockBit Gang"],
+            "confidence": "high",
+            "attribution": "Cybercriminal ransomware-as-a-service operation"
+          }
+        ]
+      },
       "metadata": {
         "cyber": {
-          "vulnerabilities": [
+          "threats": ["Ransomware", "Data Encryption", "Extortion"],
+          "URLs": [
+            "http://lockbit-ransom-leak.onion/victim-12345"
+          ],
+          "addresses": [
             {
-              "cve": "CVE-2024-0002",
-              "cvss": 10.0,
-              "severity": "critical",
-              "description": "Authentication bypass in OpenSSL",
-              "exploitPocLinks": [
-                "https://github.com/example/exploit-poc",
-                "https://nvd.nist.gov/vuln/detail/CVE-2024-0002"
-              ],
-              "products": [
-                {
-                  "productVendor": "OpenSSL",
-                  "productName": "OpenSSL",
-                  "productVersion": "3.0.x"
-                }
-              ]
+              "ip": "203.0.113.50",
+              "port": 445
             }
           ],
-          "threats": ["remote code execution", "authentication bypass"],
-          "URLs": [],
-          "addresses": [],
-          "asns": [],
-          "orgs": [],
-          "hashes": [],
-          "products": ["OpenSSL 3.0.0 through 3.0.7"],
-          "malwares": []
+          "asns": ["AS15169"],
+          "orgs": ["Malicious Hosting Provider"],
+          "hashes": [
+            "098f6bcd4621d373cade4e832627b4f6",
+            "5f4dcc3b5aa765d61d8327deb882cf99"
+          ],
+          "malwares": ["LockBit 3.0", "Cobalt Strike"],
+          "vulnerabilities": []
+        },
+        "timestamp": "2024-01-22T09:30:15Z",
+        "geolocation": {
+          "lat": 51.5074,
+          "lon": -0.1278,
+          "country": "United Kingdom",
+          "region": "England"
+        },
+        "eventType": "Cyber Threat",
+        "severity": "High",
+        "confidence": 88,
+        "entityCues": {
+          "organizations": ["Healthcare Organizations", "NHS"],
+          "sectors": ["Healthcare"]
         }
       },
-      "relatedTerms": [
+      "linkedAlerts": [
         {
-          "text": "CVE-2024-0002",
-          "url": "https://app.dataminr.com/search?q=CVE-2024-0002"
+          "linkedAlertId": "dm-alert-88888",
+          "linkType": "related_campaign",
+          "summary": "LockBit ransomware targeting healthcare sector in Europe",
+          "eventTime": 1704009600000
         }
       ],
-      "source": {
-        "displayName": "National Vulnerability Database",
-        "username": "nvd_nist",
-        "verified": true
-      },
-      "post": {
-        "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0002",
-        "timestamp": "2024-01-15T17:28:00Z",
-        "media": []
-      },
-      "expandAlertURL": "https://app.dataminr.com/app/alert/3847563830-2",
-      "eventMapLargeURL": null,
-      "score": 95.2,
-      "watchlistMatches": ["cve_tracking", "critical_vulns"],
-      "sentiment": "neutral"
+      "score": 92,
+      "alertVersion": 14
     }
   ]
 }

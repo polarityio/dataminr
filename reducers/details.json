@@ -6,23 +6,18 @@
   "pipeline": [
     {
       "op": "copy",
-      "from": "alerts[].caption",
-      "to": "reduced_results.alerts_caption"
-    },
-    {
-      "op": "copy",
-      "from": "alerts[].eventLocation.name",
-      "to": "reduced_results.alerts_event_location_name"
-    },
-    {
-      "op": "copy",
-      "from": "alerts[].companies[].name",
-      "to": "reduced_results.alerts_companies_name"
-    },
-    {
-      "op": "copy",
       "from": "alerts[].intelAgentsGrouped",
-      "to": "reduced_results.alerts_intel_agents_grouped"
+      "to": "reduced_results.alerts_intel_agents"
+    },
+    {
+      "op": "copy",
+      "from": "alerts[].metadata",
+      "to": "reduced_results.alerts_metadata"
+    },
+    {
+      "op": "copy",
+      "from": "alerts[].linkedAlerts",
+      "to": "reduced_results.alerts_linked_alerts"
     },
     {
       "op": "prune",
